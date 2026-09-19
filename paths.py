@@ -173,6 +173,51 @@ def save_config(updates: dict) -> dict:
     return cfg
 
 
+def save_json(path: str, data, indent: int = 1) -> None:
+    """原子地把一个 dict 写回某个 JSON 文件。
+
+    和 `save_config` 同一套讲究，抽出来是因为现在有**第二个**这样的文件了
+    （`lora_aliases.json` —— 用户在界面上给自己 LoRA 改名字/改分类）。这套讲究
+    不是洁癖，每一条都有理由：
+
+      · **保留原文件的换行风格**。用户可能用记事本编辑过（CRLF），也可能一直是
+        LF。直接 `json.dump` 会把整个文件的换行换掉 —— 内容没变，diff 里却全变。
+      · **原子写**：先写 `.tmp` 再 `os.replace`。中途断电/被杀不会留下半个文件。
+      · **读不出来时先备份**（`.bak`）。这是真实的数据丢失路径：用户手写的 JSON
+        有一个逗号错了，然后在界面上改了一个 LoRA 的名字 —— 那一刻解析是失败的，
+        覆盖下去就把**他手写的全部备注**连同那个错一起抹了。先存一份再说。
+
+    写失败会往上抛，由调用方决定怎么报告 —— 静默失败是这个项目最忌讳的事。
+    """
+    raw = ""
+    try:
+        with open(path, encoding="utf-8-sig", newline="") as fh:
+            raw = fh.read()
+    except FileNotFoundError:
+        raw = ""
+    except Exception:
+        raw = ""
+    broke = bool(raw) and raw.strip() not in ("", "{}")
+    if broke:
+        try:
+            json.loads(raw.lstrip("\ufeff"))
+        except Exception:
+            try:
+                with open(path + ".bak", "w", encoding="utf-8",
+                          newline="") as fh:
+                    fh.write(raw)
+                print("[warn] %s 原来读不出来，已备份到 %s.bak"
+                      % (os.path.basename(path), path), file=sys.stderr)
+            except Exception as e:
+                print("[warn] 备份 %s 失败: %s" % (path, e), file=sys.stderr)
+    nl = "\r\n" if "\r\n" in raw else "\n"
+    text = json.dumps(data, ensure_ascii=False, indent=indent)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text.replace("\n", nl) + nl)
+    os.replace(tmp, path)
+
+
 def _detect_comfy_dirs() -> dict:
     """按 ComfyUI Desktop 的常见布局找 input / output / models。
 

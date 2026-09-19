@@ -162,6 +162,12 @@ SILENT_ALLOWED = {
     ("_read_safetensors_header", 0): "不是合法 safetensors 就返回 None，调用方判断",
     ("lora_category", 0):         "训练元数据读不出来就退回默认分类",
     ("lora_aliases", 0):          "命名表不存在是正常情况",
+    ("_catalog_load", 0):         "LoRA 事实目录不存在 / 没权限是**正常情况**："
+                                  "发布版用户第一次拿到包时它可能还没生成过，"
+                                  "而且这个函数在每次 /api/capabilities 里都会走，"
+                                  "报一次就够了（同一函数第 2 个处理器管的是"
+                                  "\"文件在但内容是坏 JSON\"，那个会 warn）。"
+                                  "读不到就是空目录，分类自动退回文件名/元数据",
     ("lora_details", 0):          "ComfyUI 不可用时返回已有结果，不阻断其余流程",
     ("capabilities", 0):          "探测可选依赖，没有就是没有",
     ("capabilities", 1):          "连不上 ComfyUI 是**预期情况**：用 reachable=False "

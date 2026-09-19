@@ -647,6 +647,46 @@
   </div>
 </div>
 
+<!-- ================= 改 LoRA 的名字/分类 =================
+     分类的第一层是随包发布的 C站事实目录，但它只认得住 C站上查得到的 LoRA；
+     用户自己融合的、改过名的在里面查不到，只能靠文件名猜。猜错的表现是
+     **错的分类、界面却毫无异样**，所以这里给一条自己纠正的通道，
+     存进 lora_aliases.json（本地私人文件，不会被目录刷新覆盖）。 -->
+<div id="loraEditModal" class="modal">
+  <div class="modalBox" style="max-width:520px">
+    <div class="modalHead">
+      <b>改这个 LoRA 的名字和分类</b>
+      <button class="ghost" id="loraEditClose" style="margin-left:auto">关闭</button>
+    </div>
+    <div class="modalBody" style="display:block;padding:14px;flex-direction:column">
+      <div class="hint" id="loraEditFile" style="margin-bottom:10px;word-break:break-all"></div>
+      <div class="field" style="margin-bottom:10px">
+        <label>中文名字（留空 = 用回 C站目录里的名字）</label>
+        <input type="text" id="loraEditAlias" maxlength="40" placeholder="例：赛璐璐平涂画风"
+               style="width:100%;margin-top:4px">
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>归到哪一类</label>
+        <select id="loraEditKind" style="width:100%;margin-top:4px">
+          <option value="">（自动判断）</option>
+          <option value="style">画风</option>
+          <option value="character">角色</option>
+          <option value="quality">画质增强</option>
+          <option value="other">其他 / 特殊</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="loraEditSave">保存</button>
+        <span class="hint" id="loraEditMsg"></span>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        保存后会写进程序目录下的 <code>lora_aliases.json</code>。
+        刷新页面即可看到新分组；重新扫描 LoRA 目录不会覆盖你自己写的名字。
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ================= 蒙版编辑器 ================= -->
 <div id="maskModal" class="modal">
   <div class="modalBox">
@@ -1134,6 +1174,26 @@ function loraSubcatOf(name, meta){
   return m.category || "Concept";
 }
 
+/** 这个中文名是哪来的？—— 显示在名字后面的短标签。
+ *
+ * 为什么要显示：文件名是 SHA256 的那种（`8be1e5d2….safetensors`），括号里的
+ * 中文名是**自动**从 C 站作者那里取的。用户看见之后会以为是自己以前起的，
+ * 于是搞不清"我后来改的名字到底被记住了没有"。
+ * 认不出来的一律返回空串：宁可什么都不显示，也不要在名字后面挂一句错的来源。
+ * 判据是后端发的 `alias_source`，值域见 `server.py` 的 `lora_details()` /
+ * `lora_aliases.json` 的 `source` 字段。
+ */
+function aliasSourceLabel(src){
+  const s = (src || "").trim();
+  if(!s) return "";                       // 本地命名 / 没记来源
+  if(s === "civitai-hash") return "C站自动";
+  if(s === "civitai") return "C站";
+  if(s === "meta") return "文件里读的";
+  if(s === "C站目录") return "C站目录";
+  if(s === "手动") return "你改的";
+  return s;                               // 未知来源就照原样显示，不猜
+}
+
 // 二级分类的展开状态
 let subcatOpen = {};
 // 每个二级分类是否强制显示全部 LoRA
@@ -1209,6 +1269,63 @@ function renderLoraGroups(){
   });
 }
 
+// 「改名字/分类」弹层的状态：当前在改哪个文件。null 表示没开。
+let loraEditFile = null;
+
+function openLoraEdit(file, btn){
+  const m = (loraMeta && loraMeta[file]) || {};
+  loraEditFile = file;
+  $("loraEditFile").textContent = "文件：" + file
+    + (m.catalog_name ? "　（C站： " + m.catalog_name + "）" : "");
+  $("loraEditAlias").value = m.alias || "";
+  // 下拉框跟随当前判定的 kind；判不出来就停在「自动判断」
+  $("loraEditKind").value = ["style","character","quality","other"]
+    .includes(m.kind) ? m.kind : "";
+  $("loraEditMsg").textContent = "";
+  $("loraEditModal").classList.add("on");
+  $("loraEditAlias").focus();
+  if(btn) btn.blur();
+}
+
+function closeLoraEdit(){
+  $("loraEditModal").classList.remove("on");
+  loraEditFile = null;
+}
+
+async function saveLoraEdit(){
+  if(!loraEditFile) return;
+  const msg = $("loraEditMsg");
+  msg.style.color = "var(--dim2)";
+  msg.textContent = "保存中…";
+  try{
+    const r = await (await fetch("/api/lora_alias", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({file: loraEditFile,
+                            alias: $("loraEditAlias").value,
+                            kind: $("loraEditKind").value})
+    })).json();
+    if(!r.ok){
+      // 静默失败是这个项目最忌讳的事：写不进去就要看见原因
+      msg.style.color = "var(--warn)";
+      msg.textContent = "没保存：" + (r.error || "未知错误");
+      return;
+    }
+    // 本地马上生效，不用为了看一眼结果重刷整页
+    const m = loraMeta[loraEditFile] || (loraMeta[loraEditFile] = {});
+    if(r.alias) m.alias = r.alias; else delete m.alias;
+    m.alias_source = "手动";
+    if(r.kind){ m.kind = r.kind; m.kind_source = "手动"; }
+    else { delete m.kind; m.kind_source = ""; }
+    msg.style.color = "var(--ok)";
+    msg.textContent = "已保存";
+    setTimeout(() => { closeLoraEdit(); renderLoraGroups(); }, 450);
+  }catch(e){
+    msg.style.color = "var(--warn)";
+    msg.textContent = "保存失败：" + e;
+  }
+}
+
 function buildLoraRow(it, all, kind, sub){
   // 下拉框只列「同一个二级分类」下的 LoRA，避免几十个选项混在一起。
   // 当前已有的那个无论如何都要保留，否则改选后就找不回来了。
@@ -1237,7 +1354,15 @@ function buildLoraRow(it, all, kind, sub){
     const o = document.createElement("option");
     o.value = l;
     // 原名在前、中文名放括号里；不再重复类型（所在分组已经说明了类型）
-    o.textContent = m.alias ? (l + "（" + m.alias + "）") : l;
+    // ★ 括号里再带一句这个中文名是哪来的：文件名是哈希的时候（8be1e5d2…）
+    //   那一串中文看着像"我自己起的"，其实是按 SHA256 从 C站自动取的。
+    //   用户最关心的是**我改的名字被系统留住没有**，分不清就会反复改。
+    //   判据用后端给的 alias_source（civitai-hash / meta / civitai / C站目录 /
+    //   手动…），本地命名是空的，就不加后缀、显示得干净。
+    const asrc = aliasSourceLabel(m.alias_source);
+    o.textContent = m.alias
+      ? (l + "（" + m.alias + (asrc ? " · " + asrc : "") + "）")
+      : l;
     o.title = m.alias_note ? (m.alias_note + "\n文件: " + l) : l;
     if(l === it.name) o.selected = true;
     sel.appendChild(o);
@@ -1265,12 +1390,69 @@ function buildLoraRow(it, all, kind, sub){
     const list = td.all || [];
     trig.textContent = "";
 
+    // ── 这一条的信息是从哪来的？ ─────────────────────────────────────────
+    // 分类链有四层（C站目录 → 文件里的训练元数据 → 文件名猜 → 默认），
+    // 其中「文件名猜的」和「文件元数据」是会猜错的。猜错时的表现是**错的
+    // 分类、但界面毫无异样** —— 用户只会觉得"这玩意分得乱七八糟"，却不知道
+    // 是可以自己改的。所以把来源摆出来，并在猜的时候直接给一个「改」按钮。
+    const srcOf = () => {
+      // 「你标的」优先：用户自己写下的判断永远压过任何推断 —— 包括 C站目录。
+      if((m.kind_source || "") === "你标的") return ["你标的", "ok"];
+      if((m.alias && m.alias_source && m.alias_source !== "civitai-hash"))
+        return ["你标的", "ok"];
+      if((m.kind_source || "").indexOf("C站") === 0) return ["C站数据", "ok"];
+      if((m.catalog_name || "")) return ["C站数据", "ok"];
+      if((m.kind_source || "") === "训练元数据") return ["文件元数据推的", "warn"];
+      if((m.kind_source || "").indexOf("文件名") === 0) return ["文件名猜的", "warn"];
+      if((m.kind_source || "") === "体积推断") return ["按体积猜的", "warn"];
+      if((m.kind_source || "") === "兜底") return ["没判断出来", "warn"];
+      return ["", ""];
+    };
+    {
+      const [txt, tone] = srcOf();
+      const bits = [];
+      const mkBit = (text, color) => {
+        const s = document.createElement("span");
+        s.style.color = "var(" + color + ")";
+        s.textContent = text;          // 一律 textContent：C站名字/标签是外部数据
+        return s;
+      };
+      if(txt) bits.push(mkBit("来源：" + txt,
+                              tone === "warn" ? "--warn" : "--dim2"));
+      // C站真名 —— 目录里的作者模型名。文件名是哈希的时候，只有这一行能
+      // 告诉用户"这到底是个什么东西"。
+      // ★ 有本地名字时也要显示：原来的条件带了 `&& !m.alias`，于是
+      //   `8be1e5d2….safetensors（Detailed anime style…）` 这种行里
+      //   **一个字都看不出这个名字是自动从 C站取的**，用户会当成自己起的。
+      //   和下拉框后缀（aliasSourceLabel）配成一对，两处都说清来源。
+      if(m.catalog_name) bits.push(mkBit(
+          (m.alias ? "C站真名 " : "") + m.catalog_name, "--fg"));
+      if(m.catalog_base) bits.push(mkBit("底模 " + m.catalog_base, "--dim2"));
+      const wh = m.catalog_weight_hint;
+      if(wh && wh.length) bits.push(mkBit("作者推荐权重 " + wh.join("–"), "--dim2"));
+      (m.catalog_tags || []).slice(0, 8).forEach(a =>
+        bits.push(mkBit("#" + a, "--dim2")));
+      if(bits.length){
+        const d = document.createElement("div");
+        d.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;font-size:11px;margin-bottom:2px";
+        bits.forEach(b => d.appendChild(b));
+        trig.appendChild(d);
+      }
+    }
+
     // 第一行：中文作用说明 + C站链接
     // class="note" 让 CSS 里的 white-space:pre-line 生效，说明里的换行才真的换行
     if(m.alias_note){
       const d = document.createElement("div");
       d.className = "note";
       d.textContent = m.alias_note;
+      trig.appendChild(d);
+    }
+    if(m.catalog_note){
+      const d = document.createElement("div");
+      d.className = "note";
+      d.style.color = "var(--dim2)";
+      d.textContent = m.catalog_note;
       trig.appendChild(d);
     }
     if(m.alias_url){
@@ -1281,6 +1463,17 @@ function buildLoraRow(it, all, kind, sub){
       a.textContent = "C站原帖 ↗";
       a.style.cssText = "color:var(--accent);font-size:11px;margin-right:8px";
       trig.appendChild(a);
+    }
+
+    // 改名字 / 改分类 —— 分类猜错时，用户自己能改回来，改完存在
+    // lora_aliases.json 里（下一层"文件名猜的"永远追不上人的判断）。
+    {
+      const edit = document.createElement("button");
+      edit.className = "ghost";
+      edit.textContent = "改名字/分类";
+      edit.style.cssText = "padding:1px 7px;font-size:11px;margin-right:8px";
+      edit.onclick = () => openLoraEdit(it.name, edit);
+      trig.appendChild(edit);
     }
     // 第二行：触发词（不再自动加入，改为可复制到自己填写）
     const t2 = document.createElement("div");
@@ -1787,6 +1980,17 @@ function bindMaskUI(){
   });
 }
 bindMaskUI();
+
+// ---------- 改 LoRA 名字/分类的弹层 ----------
+$("loraEditClose").onclick = closeLoraEdit;
+$("loraEditSave").onclick = saveLoraEdit;
+$("loraEditModal").addEventListener("click", ev => {
+  if(ev.target === $("loraEditModal")) closeLoraEdit();
+});
+$("loraEditAlias").addEventListener("keydown", ev => {
+  if(ev.key === "Enter") saveLoraEdit();
+  if(ev.key === "Escape") closeLoraEdit();
+});
 
 // ---------- 修图前后对比 ----------
 // 用 canvas 绘制：左半显示修图前，右半显示修图后，中间一条分割线。

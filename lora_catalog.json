@@ -1,0 +1,835 @@
+{
+ "schema": 1,
+ "what": "LoRA 事实目录：按文件 SHA256 从 Civitai 反查回来的公开信息（模型真名 / 版本 / 底模 / 作者声明的触发词 / 作者挂的标签 / 推荐权重 / 链接）。只存事实，不存分类判断。",
+ "how_to_refresh": "在项目目录里跑 python dev/make_lora_catalog.py（--enrich 只重抓 C站信息，--refresh 连哈希一起重算）。没有它也能用，程序会退回到「文件元数据 → 猜文件名」两层判断。",
+ "generated": "2026-09-19",
+ "loras": {
+  "748cmSDXL.safetensors": {
+   "sha256": "85715eb695d5e42cc613ada4b12bb87cbeb1b6ef4f11142bb30774f8f26f261a",
+   "bytes": 255025442,
+   "civitai": {
+    "model_name": "748cm | Style for Illustrious/NoobAI 0.75",
+    "model_type": "LORA",
+    "version_name": "v1.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "748cmstyle"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "anime",
+     "cute",
+     "woman",
+     "style",
+     "girls"
+    ],
+    "nsfw": null,
+    "nsfw_level": 7,
+    "published": "",
+    "version_id": 1056404,
+    "url": "https://civitai.com/models/943607?modelVersionId=1056404"
+   },
+   "file_meta": {
+    "output_name": "748cmSDXL",
+    "sd_model_name": "noobaiXLNAIXL_epsilonPred075.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "8be1e5d2cc7cd938037337603fb51565.safetensors": {
+   "sha256": "59d5706a66379263f4756c28e8ebf5573ee03e50e9a317b827c9b99236e0c901",
+   "bytes": 405031516,
+   "civitai": {
+    "model_name": "Detailed anime style - Illustrious V2.0",
+    "model_type": "LORA",
+    "version_name": "v0.7",
+    "base_model": "Illustrious",
+    "trained_words": [],
+    "words_source": "",
+    "weight_hint": null,
+    "tags": [
+     "2d",
+     "anime",
+     "styled",
+     "style",
+     "styles"
+    ],
+    "nsfw": null,
+    "nsfw_level": 1,
+    "published": "",
+    "version_id": 1750914,
+    "url": "https://civitai.com/models/1547435?modelVersionId=1750914"
+   },
+   "file_meta": {
+    "output_name": "cveb6c5e878c739bt83g",
+    "sd_model_name": "c3409e34-94fc-4843-bea2-c2260f0f5be6.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Anime_artistic_2.safetensors": {
+   "sha256": "b48c8bca62720de6887bba77fec0b0ce566fbe6a645d9f203db00f69724f0195",
+   "bytes": 228504844,
+   "civitai": {
+    "model_name": "Anime artistic",
+    "model_type": "LORA",
+    "version_name": "v3.0 - illustrious",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "Art8st",
+     "Anime2rt",
+     "Semi2realistic"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "vhs",
+     "woman",
+     "pony",
+     "anime",
+     "films",
+     "noob",
+     "man",
+     "styles",
+     "style"
+    ],
+    "nsfw": null,
+    "nsfw_level": 7,
+    "published": "",
+    "version_id": 2536829,
+    "url": "https://civitai.com/models/1586542?modelVersionId=2536829"
+   },
+   "file_meta": {
+    "output_name": "Anime_artistic_2",
+    "sd_model_name": "1546777.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Aura_Phantasy_illu.safetensors": {
+   "sha256": "1e0caf6f612df71d547e6119d3cca8910354356cef450f45058a4383b8c80c78",
+   "bytes": 228458412,
+   "civitai": {
+    "model_name": "Aura Phantasy | Shiiro's Styles | Ai",
+    "model_type": "LORA",
+    "version_name": "v1.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "4ur4_illu,shiny"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "woman",
+     "realistic",
+     "cartoon",
+     "detail",
+     "nsfw",
+     "game character",
+     "abstract painting",
+     "male",
+     "background plate",
+     "manga artist",
+     "shiiro",
+     "artist",
+     "anime",
+     "man",
+     "style",
+     "art style",
+     "lora",
+     "photorealistic",
+     "shapes",
+     "color",
+     "art",
+     "flowers",
+     "artstyle",
+     "girls",
+     "paint",
+     "backgrounds",
+     "manga",
+     "styles",
+     "geometry",
+     "background pony"
+    ],
+    "nsfw": null,
+    "nsfw_level": 7,
+    "published": "",
+    "version_id": 1478930,
+    "url": "https://civitai.com/models/1310467?modelVersionId=1478930"
+   },
+   "file_meta": {
+    "output_name": "Aura_illu",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Eyes_for_Illustrious_Lora_Perfect_anime_eyes.safetensors": {
+   "sha256": "97c1a083ffe6b4d45c545196eabd01c754936b996ade0c9db6d072f3bd340c55",
+   "bytes": 228457660,
+   "civitai": {
+    "model_name": "Eyes for Illustrious Lora (Perfect anime eyes)",
+    "model_type": "LORA",
+    "version_name": "V1",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "perfect eyes"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "perfect eyes",
+     "concept"
+    ],
+    "nsfw": null,
+    "nsfw_level": 5,
+    "published": "",
+    "version_id": 2066663,
+    "url": "https://civitai.com/models/1826240?modelVersionId=2066663"
+   },
+   "file_meta": {
+    "output_name": "Eyes_for_Illustrious_Lora_Perfect_anime_eyes",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "FootfallPoem1llust.safetensors": {
+   "sha256": "244fd1168598721e4d99700b93ec6e35ebce83336a3d2d67a2c51662f133404b",
+   "bytes": 53515324,
+   "civitai": {
+    "model_name": "HS Style Gallery",
+    "model_type": "LORA",
+    "version_name": "FootfallPoem1llust",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "footfocus,hshiart",
+     "foot focus,feet,toes,barefoot,soles"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "style",
+     "anime",
+     "fantasy",
+     "2.5d",
+     "2d",
+     "digital art",
+     "sdxl",
+     "illustrious",
+     "illustration",
+     "art"
+    ],
+    "nsfw": true,
+    "nsfw_level": 60,
+    "published": "",
+    "version_id": 3141093,
+    "url": "https://civitai.com/models/1175632?modelVersionId=3141093"
+   },
+   "file_meta": {
+    "output_name": "FootfallPoem1llust",
+    "sd_model_name": "HsAnimeillustriousXLv30.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Hoseki_ZenlessZoneZero_MiyabiHoshimi_IllustriousXL_v2.safetensors": {
+   "sha256": "367f93899ac4d171b98bd8e47b590f84c761832e49152316a778a58e93906373",
+   "bytes": 57416899,
+   "civitai": {
+    "model_name": "Miyabi Hoshimi 星见雅 | Zenless Zone Zero [IllustriousXL]",
+    "model_type": "LORA",
+    "version_name": "v2.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "hsmyb, animal ears, animal ear fluff, red eyes, white pupils, bright pupils, black hair, long hair, blunt bangs, sidelocks, half up braid, medium breasts",
+     "green jacket, open jacket, wide sleeves, chest strap, id card, white collared shirt, black necktie, arm strap, high-waist skirt, black skirt, long skirt, pleated skirt, belt, tassel, black pantyhose, black boots, high heel boots, single fingerless glove, black gloves, single mechanical arm",
+     "holding sword, katana",
+     "disembodied eye"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": [
+     1.0
+    ],
+    "tags": [
+     "zenless zone zero",
+     "character",
+     "hoshimi miyabi",
+     "woman",
+     "video game",
+     "anime",
+     "game character",
+     "girls"
+    ],
+    "nsfw": null,
+    "nsfw_level": 29,
+    "published": "",
+    "version_id": 1965199,
+    "url": "https://civitai.com/models/1010987?modelVersionId=1965199"
+   }
+  },
+  "IL20-NP43i_v2.safetensors": {
+   "sha256": "7fdc366d620016f55c3ec4881e107baf69b9e1e5090cb61c45ef1632423de6db",
+   "bytes": 114428780,
+   "civitai": {
+    "model_name": "[Illustrious-XL] Nipple LORA for ADetailer / ADetailer用の乳首LORA",
+    "model_type": "LORA",
+    "version_name": "IL20-NP43i",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "nipples"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": [
+     0.3,
+     0.4
+    ],
+    "tags": [
+     "style",
+     "adetailer",
+     "nipples",
+     "anime"
+    ],
+    "nsfw": true,
+    "nsfw_level": 60,
+    "published": "",
+    "version_id": 2685326,
+    "url": "https://civitai.com/models/827482?modelVersionId=2685326"
+   },
+   "file_meta": {
+    "output_name": "IL20-NP43i_v2",
+    "sd_model_name": "anyillustriousXLFor_200.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "MSS_v2_IL.safetensors": {
+   "sha256": "37a5bc25db07f025a3ad68011a25d5fd95d5104822dd651ee115e928a26201be",
+   "bytes": 57451601,
+   "civitai": {
+    "model_name": "Illustrious Style Pack",
+    "model_type": "LORA",
+    "version_name": "MSS v2",
+    "base_model": "Illustrious",
+    "trained_words": [],
+    "words_source": "",
+    "weight_hint": [
+     0.4,
+     0.8
+    ],
+    "tags": [
+     "anime",
+     "mature",
+     "style",
+     "girls",
+     "lora",
+     "styles",
+     "epic",
+     "female characters",
+     "woman",
+     "anime character",
+     "sexy",
+     "game character",
+     "illustriouxl"
+    ],
+    "nsfw": null,
+    "nsfw_level": 30,
+    "published": "",
+    "version_id": 1942096,
+    "url": "https://civitai.com/models/1060551?modelVersionId=1942096"
+   },
+   "file_meta": {
+    "output_name": "MSS_v2_IL_r1",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Ohogao_illustrious_v1.safetensors": {
+   "sha256": "1d833963bdd45b78c23aa7540ea4e127cff878517e983a5a3d30a55ee011615f",
+   "bytes": 114446384,
+   "civitai": {
+    "model_name": "Ohogao SDXL LoRA [illustrious, Pony]",
+    "model_type": "LORA",
+    "version_name": "illustrious v1.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "ohogao,  puckered lips, trembling, tearing up,  v-shaped eyebrows, rolling eyes, open mouth",
+     "tongue out, tongue up"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "concept",
+     "ahegao"
+    ],
+    "nsfw": null,
+    "nsfw_level": 25,
+    "published": "",
+    "version_id": 1192192,
+    "url": "https://civitai.com/models/322121?modelVersionId=1192192"
+   },
+   "file_meta": {
+    "output_name": "Ohogao_illustrious_v1",
+    "sd_model_name": "anyillustriousXLFor_v11.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "STY-RL3_for_IL-000008.safetensors": {
+   "sha256": "e8ada5cf391352a34171f01d3379baeb4708d30665c6fcdac974a96218df77cc",
+   "bytes": 114459292,
+   "civitai": {
+    "model_name": "Style For My Flat Color",
+    "model_type": "LORA",
+    "version_name": "v1.0 for IL",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "(STY-RL3:1),flat_color,"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "anime",
+     "style"
+    ],
+    "nsfw": null,
+    "nsfw_level": 3,
+    "published": "",
+    "version_id": 1369960,
+    "url": "https://civitai.com/models/1216154?modelVersionId=1369960"
+   },
+   "file_meta": {
+    "output_name": "STY-RL3_for_IL",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Soft_Circle_Courreges_Texture_Style_of_Cum.safetensors": {
+   "sha256": "eaf7dd3fdcd275f58da13d4c735b28142782f08d9b749e6991a9a6ba7f2e41cd",
+   "bytes": 228453940,
+   "civitai": {
+    "model_name": "Soft Circle Courreges Style Texture of Cum",
+    "model_type": "LORA",
+    "version_name": "v1.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "sc courreges cum, bukkake, uncensored",
+     "cum on face, cum on hair",
+     "cum in mouth, cum in nose",
+     "cum on body, cum on breasts, cum on stomach, cum on thigh",
+     "cum on ass",
+     "cum in pussy, cumdrip",
+     "cum on clothes"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "style"
+    ],
+    "nsfw": true,
+    "nsfw_level": 60,
+    "published": "",
+    "version_id": 2373426,
+    "url": "https://civitai.com/models/2097769?modelVersionId=2373426"
+   },
+   "file_meta": {
+    "output_name": "Soft_Circle_Courreges_Texture_Style_of_Cum",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "ViolaBangDream1.1_IL.safetensors": {
+   "sha256": "37978fcf0087ae90c692035a1d5a6a4405f4d27747f59d54d399bda7af8f42fb",
+   "bytes": 340778052,
+   "civitai": {
+    "model_name": "ビオラ | Viola | 薇歐拉 from「BanG Dream! YUME∞MITA」",
+    "model_type": "LORA",
+    "version_name": "v1.1",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "character prompt: viola \\(bang dream!\\)",
+     "dark green hair",
+     "single hair bun",
+     "long hair",
+     "mole under mouth",
+     "green eyes",
+     "one side up",
+     "hair ornament"
+    ],
+    "words_source": "civitai:模型页简介",
+    "weight_hint": null,
+    "tags": [
+     "character",
+     "bang dream!",
+     "viola",
+     "bang dream! yume∞mita"
+    ],
+    "nsfw": null,
+    "nsfw_level": 3,
+    "published": "",
+    "version_id": 3204007,
+    "url": "https://civitai.com/models/2792905?modelVersionId=3204007"
+   },
+   "file_meta": {
+    "output_name": "ViolaBangDream1.1_IL",
+    "sd_model_name": "illustriousXL_v01.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "Yoneyama_Mai_illu.safetensors": {
+   "sha256": "963501a987ea0a2d9a3adb96ad540a029c732c1e47874925076d118fabb99b22",
+   "bytes": 114442252,
+   "civitai": {
+    "model_name": "Yoneyama Mai | Style LoRa",
+    "model_type": "LORA",
+    "version_name": "v1.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     " Y0ney4m4_illu",
+     "digital art, surreal, dynamic composition"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "lora",
+     "girl",
+     "model",
+     "anime",
+     "style",
+     "art",
+     "clothings",
+     "shiiro",
+     "styles",
+     "woman",
+     "artstyle",
+     "manga",
+     "abstract"
+    ],
+    "nsfw": null,
+    "nsfw_level": 3,
+    "published": "",
+    "version_id": 1235646,
+    "url": "https://civitai.com/models/1100018?modelVersionId=1235646"
+   },
+   "file_meta": {
+    "output_name": "Yoneyama_Mai_illu",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "anatomy_helper.safetensors": {
+   "sha256": "bf6a950036b7599212a2c68d65f3ba07b28689067e167915d2a0ecb2018c26ca",
+   "bytes": 228473940,
+   "civitai": {
+    "model_name": "Anatomy Helper",
+    "model_type": "LORA",
+    "version_name": "V1",
+    "base_model": "Illustrious",
+    "trained_words": [],
+    "words_source": "",
+    "weight_hint": null,
+    "tags": [
+     "concept",
+     "pose",
+     "anatomy",
+     "hands",
+     "feet"
+    ],
+    "nsfw": null,
+    "nsfw_level": 3,
+    "published": "",
+    "version_id": 1318504,
+    "url": "https://civitai.com/models/1171869?modelVersionId=1318504"
+   },
+   "file_meta": {
+    "output_name": "anatomy_helper",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "anime_screencap-IL-NOOB_v3.safetensors": {
+   "sha256": "98f877ac296f6fbea8ee9d8098d7d2b5f5b4066a47ebec768917d8277490ef86",
+   "bytes": 69792232,
+   "civitai": {
+    "model_name": "Fine Anime Screencap XL | Anime Screencap Style LoRa Illustrious and PonyXL",
+    "model_type": "LORA",
+    "version_name": "Illustrious v3.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "anime screencap, anime coloring"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": [
+     1.0
+    ],
+    "tags": [
+     "sexy",
+     "animemix",
+     "screencap style",
+     "anime screencap",
+     "anime characters",
+     "girls",
+     "screencap",
+     "anime screencap pony xl",
+     "japanese animation",
+     "anime screencap autismmix xl",
+     "woman",
+     "ilioustrus",
+     "anime",
+     "flat style",
+     "japanese anime",
+     "style"
+    ],
+    "nsfw": null,
+    "nsfw_level": 7,
+    "published": "",
+    "version_id": 2553688,
+    "url": "https://civitai.com/models/345962?modelVersionId=2553688"
+   },
+   "file_meta": {
+    "output_name": "anime_screencap",
+    "sd_model_name": "Laxhar/noobai-XL-0.5",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "cervixNmode_Illustrious-sv_cumulative_0.8.safetensors": {
+   "sha256": "720c6485ce8cf324353158b2d33f04308b11c23fbef945ee76e91bb9768e79c7",
+   "bytes": 46252508,
+   "civitai": {
+    "model_name": "Spread pussy",
+    "model_type": "LORA",
+    "version_name": "v1.0_[Illustrious]",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "pussy"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "vagina",
+     "hentai",
+     "concept",
+     "spread pussy",
+     "porn"
+    ],
+    "nsfw": true,
+    "nsfw_level": 60,
+    "published": "",
+    "version_id": 2852178,
+    "url": "https://civitai.com/models/11363?modelVersionId=2852178"
+   },
+   "file_meta": {
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "curearcanashadow_v1.1_IL.safetensors": {
+   "sha256": "40ef62d0e857f7f36d598ce92f115d5be8e93d75fbf389940b271fb230e88e2f",
+   "bytes": 228457860,
+   "civitai": {
+    "model_name": "Cure Arcana Shadow (Meitantei Precure!) / キュアアルカナ・シャドウ (名探偵プリキュア！)",
+    "model_type": "LORA",
+    "version_name": "for IL v1.1",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "curearcanashadow",
+     "arcanashadowcostume"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "名探偵プリキュア！",
+     "anime",
+     "pretty cure",
+     "character",
+     "precure",
+     "プリキュア"
+    ],
+    "nsfw": null,
+    "nsfw_level": 1,
+    "published": "",
+    "version_id": 2851375,
+    "url": "https://civitai.com/models/2299086?modelVersionId=2851375"
+   },
+   "file_meta": {
+    "output_name": "curearcanashadow_v1.1_IL",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "illustrious_masterpieces_v3.safetensors": {
+   "sha256": "8d9ee4bd2a16c2c72c1e176d247d379c59312585ea3d154e55492ca34d0313fe",
+   "bytes": 228509780,
+   "civitai": {
+    "model_name": "Aesthetic Quality Modifiers - Masterpiece",
+    "model_type": "LORA",
+    "version_name": "v3.0 [illustrious]",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "masterpiece, best quality, very aesthetic"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "styles",
+     "anime",
+     "aesthetic",
+     "concept"
+    ],
+    "nsfw": null,
+    "nsfw_level": 31,
+    "published": "",
+    "version_id": 2247497,
+    "url": "https://civitai.com/models/929497?modelVersionId=2247497"
+   },
+   "file_meta": {
+    "output_name": "illustrious_masterpieces_v3",
+    "sd_model_name": "illustriousXL_v01.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "ma1ma1helmes_b-000014.safetensors": {
+   "sha256": "7c18d2a61f63e84c194a605a88a57e619d2ca22fa29196fd96e84532d6726499",
+   "bytes": 114441204,
+   "civitai": {
+    "model_name": "ma1ma1helmes | Shiiro's Styles | Niji",
+    "model_type": "LORA",
+    "version_name": "Style_B",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "ma1ma1helmes_b_illu,sketch"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "photorealistic",
+     "anime",
+     "manga",
+     "game character",
+     "woman",
+     "cartoon",
+     "art style",
+     "art",
+     "artstyle",
+     "flowers",
+     "paint",
+     "geometry",
+     "shiiro",
+     "lora",
+     "backgrounds",
+     "male",
+     "girls",
+     "nsfw",
+     "color",
+     "artist",
+     "realistic",
+     "background pony",
+     "shapes",
+     "manga artist",
+     "detail",
+     "abstract painting",
+     "styles",
+     "background plate",
+     "man",
+     "style"
+    ],
+    "nsfw": null,
+    "nsfw_level": 15,
+    "published": "",
+    "version_id": 1447126,
+    "url": "https://civitai.com/models/1204563?modelVersionId=1447126"
+   },
+   "file_meta": {
+    "output_name": "ma1ma1helmes_b",
+    "sd_model_name": "1410435.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "niji_and_midj_mix217.safetensors": {
+   "sha256": "1ddbfb3d598b73a4e36ff5423692638d082fd77d433cd06d9b52396d989f902c",
+   "bytes": 228487884,
+   "civitai": {
+    "model_name": "Niji anime style [illustrious|Flux|Pony]",
+    "model_type": "LORA",
+    "version_name": "illustrious v3.0",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "maybe the change the style little bit 🗿"
+    ],
+    "words_source": "civitai:模型页简介",
+    "weight_hint": null,
+    "tags": [
+     "style",
+     "flux",
+     "aesthetic",
+     "realistic",
+     "cartoon",
+     "lora",
+     "anime",
+     "semi realistic",
+     "woman"
+    ],
+    "nsfw": null,
+    "nsfw_level": 7,
+    "published": "",
+    "version_id": 2336579,
+    "url": "https://civitai.com/models/1261988?modelVersionId=2336579"
+   },
+   "file_meta": {
+    "output_name": "niji_and_midj_mix",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  },
+  "re4lity.safetensors": {
+   "sha256": "90eef639a11adb43b8ccba449c94c38b3942f1c89917ecb7c13da8554120d1d3",
+   "bytes": 228461844,
+   "civitai": {
+    "model_name": "Anime X Reality | Shiiro's Styles",
+    "model_type": "LORA",
+    "version_name": "reality_sync",
+    "base_model": "Illustrious",
+    "trained_words": [
+     "re4lity_sync_illu"
+    ],
+    "words_source": "civitai:trainedWords",
+    "weight_hint": null,
+    "tags": [
+     "game character",
+     "geometry",
+     "artstyle",
+     "cartoon",
+     "realistic",
+     "nsfw",
+     "girls",
+     "artist",
+     "art style",
+     "detail",
+     "woman",
+     "man",
+     "lora",
+     "photorealistic",
+     "manga",
+     "furry",
+     "flowers",
+     "paint",
+     "background plate",
+     "art",
+     "anime",
+     "backgrounds",
+     "male",
+     "shapes",
+     "color",
+     "abstract painting",
+     "style",
+     "shiiro",
+     "styles",
+     "manga artist",
+     "background pony"
+    ],
+    "nsfw": null,
+    "nsfw_level": 3,
+    "published": "",
+    "version_id": 1308731,
+    "url": "https://civitai.com/models/1163407?modelVersionId=1308731"
+   },
+   "file_meta": {
+    "output_name": "re4lity",
+    "sd_model_name": "889818.safetensors",
+    "base_model_version": "sdxl_base_v1-0"
+   }
+  }
+ }
+}

@@ -325,7 +325,13 @@ def warn(where: str, err: BaseException) -> None:
     console shows what happened.
     """
     try:
-        print("[warn] %s: %s: %s" % (where, type(err).__name__, err),
+        # 位置是**现取**的，不是写死的 —— 以前这里靠调用方在标签里手写
+        # "(L####)"，文件一长就全部漂移（实测 7 处差 470~2424 行，
+        # 照着手写行号翻过去会翻到完全不相干的代码，反而误导排查）。
+        f = sys._getframe(1)
+        loc = "%s:%d %s" % (os.path.basename(f.f_code.co_filename),
+                            f.f_lineno, f.f_code.co_name)
+        print("[warn] %s [%s]: %s: %s" % (where, loc, type(err).__name__, err),
               file=sys.stderr, flush=True)
     except Exception:
         pass
@@ -759,16 +765,14 @@ _NAME_CATEGORY = (
 )
 
 
-def lora_category(name: str, meta: dict, filename: str) -> dict:
-    """Best-effort category for a LoRA, borrowing Civitai's vocabulary.
+def _cat_by_name(stem: str, origin: str) -> dict | None:
+    """按名字里的关键词判类。命中返回 {category, source, kind}，没命中返回 None。
 
-    Returns {"category": str, "source": str}. The order of trust is:
-      1. filename keywords  (the author's own label)
-      2. training metadata  (base model + tensor layout)
-      3. Civitai category   (only on a confident match - see module note)
+    单独抽出来是因为现在有**两个**名字要一起看（见 `lora_category`）：文件名，
+    以及从 C站目录查回来的作者给的真名。两个都要过同一套规则，命中谁先看优先级。
     """
-    stem = os.path.splitext(os.path.basename(filename))[0].lower()
-
+    if not stem:
+        return None
     # A LoRA named "画质/quality/detail/enhance" is a quality tool, and it must
     # NOT then be filed under Style/Concept - that is the mismatch the UI showed
     # ("画质增强·通用" sitting inside 画风 > Concept). Checked after the filename
@@ -780,14 +784,120 @@ def lora_category(name: str, meta: dict, filename: str) -> dict:
     for pat, cat in _NAME_CATEGORY:
         if re.search(pat, stem):
             if cat == "Tool":
-                return {"category": "Tool", "source": "文件名", "kind": "quality"}
+                return {"category": "Tool", "source": origin, "kind": "quality"}
             if has_tool_word:
-                return {"category": "Tool", "source": "文件名+画质词",
+                return {"category": "Tool", "source": origin + "+画质词",
                         "kind": "quality"}
-            return {"category": cat, "source": "文件名"}
+            return {"category": cat, "source": origin}
 
     if has_tool_word:
-        return {"category": "Tool", "source": "文件名画质词", "kind": "quality"}
+        return {"category": "Tool", "source": origin + "画质词", "kind": "quality"}
+    return None
+
+
+# Civitai's own category labels as they appear inside the **tags the author
+# picked on the upload form** (`style` / `character` / `concept` / `poses` …).
+#
+# ★ 这里有个踩过的坑：C站的「分类」不是一个字段。v1 的模型对象键里根本没有
+#   `category`，`type` 永远是 "LORA"，而 by-hash 那个接口返回的 `tags` 是**空
+#   数组** —— 只看它就会得出"A站上查不到分类"。真正的标签要去
+#   `/api/v1/models/<id>` 抓（`dev/make_lora_catalog.py` 现在会抓第二趟）。
+#
+# 实测 22 个本机 LoRA：`style` 标签覆盖了 13 条里除 2 条外的所有；而
+# `detail` / `enhancer` 一起出现时，"style" 说的其实是**底模**的画风而不是
+# 这个 LoRA 的用途（`IL20-NP43i_v2` 是个 ADetailer 用的乳首 LoRA，也挂着
+# style+anime）—— 所以"画质词兼职"这条规则在这儿照样要挡一道。
+_TAG_CATEGORY = {
+    "character": ("Character", "character"),
+    "anime character": ("Character", "character"),
+    "game character": ("Character", "character"),
+    "female characters": ("Character", "character"),
+    "clothing": ("Clothing", None),
+    "clothings": ("Clothing", None),
+    "poses": ("Poses", None),
+    "pose": ("Poses", None),
+    "action": ("Action", None),
+    "background": ("Background", None),
+    "backgrounds": ("Background", None),
+    "background plate": ("Background", None),
+    "objects": ("Objects", None),
+    "vehicle": ("Vehicle", None),
+    "animal": ("Animal", None),
+    "tool": ("Tool", "quality"),
+    "enhancer": ("Tool", "quality"),
+}
+# 只有**画风**这一族需要多个同义词（作者挂的是 `style` / `styles` / `artstyle`
+# / `art style` / `style pack`，写法很散），其余用精确匹配就够 —— 精确匹配不会
+# 把 `background pony`（一个底模梗）误判成 Background。
+_TAG_STYLE = ("style", "styles", "artstyle", "art style", "art styles",
+              "flat style", "screencap style", "style pack")
+_TOOL_TAG_WORDS = ("detail", "enhancer", "undetailed", "quality", "fix")
+
+
+def _cat_by_tags(tags, origin: str) -> dict | None:
+    """按作者挂的 C站标签判类。`tags` 是字符串序列。"""
+    if not tags:
+        return None
+    low = [str(t).strip().lower() for t in tags if str(t).strip()]
+    toolish = any(w in t for t in low for w in _TOOL_TAG_WORDS)
+    for t in low:
+        hit = _TAG_CATEGORY.get(t)
+        if hit:
+            cat, kind = hit
+            d = {"category": cat, "source": origin}
+            if kind:
+                d["kind"] = kind
+            return d
+    for t in low:
+        if t in _TAG_STYLE:
+            if toolish:
+                return {"category": "Tool", "source": origin + "·画质标签",
+                        "kind": "quality"}
+            return {"category": "Style", "source": origin}
+    return None
+
+
+def lora_category(name: str, meta: dict, filename: str,
+                  facts: dict | None = None) -> dict:
+    """Best-effort category for a LoRA, borrowing Civitai's vocabulary.
+
+    Returns {"category", "source"} and sometimes "kind". The order of trust:
+      1. **C站目录里作者给的真名 / 作者挂的标签**（`facts`）—— 事实层，最高
+      2. filename keywords  (the author's own label)
+      3. training metadata  (base model + tensor layout)
+      4. default Concept
+
+    `facts` 是 `lora_catalog.json` 里按 SHA256 查回来的公开信息（作者的模型名 /
+    版本名 / 触发词 / 标签）。以前只有文件名可看，于是本地叫
+    `8be1e5d2cc7cd938037337603fb51565.safetensors` 的文件连猜都猜不了；而
+    `MSS_v2_IL.safetensors` 这种名字**完全看不出**它是 "Illustrious Style Pack"。
+    现在按「真名 → 标签 → 文件名」的顺序各过一遍，谁先命中听谁的。
+
+    ★ 为什么"真名"排在"标签"前面：真名里出现 `Style` / `Screencap` 是作者
+    **主动写给这个 LoRA** 的，比 upload 表单上随手勾的标签更具体；反过来先看
+    标签的话，`[Illustrious-XL] Nipple LORA for ADetailer` 会因为挂了 `style`
+    标签被判成画风，而它实际上是个画质工具类的东西。
+    """
+    stem = os.path.splitext(os.path.basename(filename))[0].lower()
+    cat = _cat_by_name(stem, "文件名")
+
+    if facts:
+        cn = str(facts.get("civitai_name") or "")
+        hit = _cat_by_name(cn.lower(), "C站模型名") if cn else None
+        if hit:
+            cat = hit
+        else:
+            tag_cat = _cat_by_tags(facts.get("civitai_tags") or [], "C站标签")
+            if tag_cat:
+                cat = tag_cat
+            elif cn and cat is not None and cat.get("source") == "文件名":
+                # 真名和标签都没命中，只剩文件名猜的 —— 保留它，但把来源标清楚，
+                # 让界面上能看出"这条是猜的"，别和事实混在一起。
+                cat = dict(cat)
+                cat["source"] = "文件名（猜的）"
+
+    if cat is not None:
+        return cat
 
     # Filing every metadata-bearing file under Character was wrong:
     # illustrious_masterpieces_v3 has training metadata but is a quality/style
@@ -814,7 +924,8 @@ def lora_category(name: str, meta: dict, filename: str) -> dict:
     return {"category": "Concept", "source": "默认"}
 
 
-def classify_lora(path: str, alias: str = "", alias_over: dict | None = None) -> dict:
+def classify_lora(path: str, alias: str = "", alias_over: dict | None = None,
+                  facts: dict | None = None) -> dict:
     """Guess what a LoRA is for, from its own training metadata.
 
     Signals actually present in the files examined here:
@@ -823,6 +934,10 @@ def classify_lora(path: str, alias: str = "", alias_over: dict | None = None) ->
       * Hand-made "enhancer" LoRAs often carry NO metadata at all.
       * A concept/character LoRA patches only the UNet; general-purpose ones
         frequently patch the text encoder too.
+      * `facts` = the shipped LoRA catalogue entry for this exact file (looked up
+        by name, generated from a SHA256 match against Civitai). It carries the
+        author's own model name and declared trigger words, which beats every
+        guess above.
     """
     name = os.path.basename(path)
     info = {
@@ -872,7 +987,7 @@ def classify_lora(path: str, alias: str = "", alias_over: dict | None = None) ->
                        named[0] if named else
                        (min(counts, key=counts.get) if counts else ""))
         except Exception as e:
-            warn("清理中转文件失败(L299)", e)
+            warn("清理中转文件失败", e)
     info["concept"] = concept
     tri = extract_triggers(path)
     info["triggers"] = tri.get("all", [])
@@ -888,22 +1003,29 @@ def classify_lora(path: str, alias: str = "", alias_over: dict | None = None) ->
         meta.get("ss_output_name") or meta.get("ss_tag_frequency")
         or meta.get("ss_num_train_images") or meta.get("ss_dataset_dirs"))
 
+    # ★ `kind_source` 从第一处分派就要写上。它是界面上那个"来源：xxx"角标唯一
+    #   的输入 —— 以前只在最后 cat 分支里赋值，于是**走元数据分派的那些条目
+    #   角标是空的**，而那恰恰是最需要标出来的（元数据也会猜错）。
     if has_training_meta and 0 < unet and te == 0:
         info["kind"] = "character"
         info["label"] = "角色 / 概念"
         info["note"] = "训练元数据齐全，只改图像模型 —— 典型的角色或特定概念 LoRA"
+        info["kind_source"] = "训练元数据"
     elif has_training_meta:
         info["kind"] = "style"
         info["label"] = "画风 / 概念"
         info["note"] = "有训练元数据，同时调整文本编码器"
+        info["kind_source"] = "训练元数据"
     elif not meta and info["size_mb"] < 150:
         info["kind"] = "quality"
         info["label"] = "画质增强"
         info["note"] = "无训练元数据且体积小 —— 多为细节/画质增强类"
+        info["kind_source"] = "体积推断"
     else:
         info["kind"] = "other"
         info["label"] = "其他"
         info["note"] = "无法从元数据判定"
+        info["kind_source"] = "兜底"
 
     # Compatibility OUTRANKS the guess above: a LoRA whose keys ComfyUI cannot
     # match loads without error but applies nothing, so it must never be
@@ -912,12 +1034,13 @@ def classify_lora(path: str, alias: str = "", alias_over: dict | None = None) ->
     if info["key_layout"].get("compatible") is False:
         info["kind"] = "incompatible"
         info["label"] = "不兼容"
+        info["kind_source"] = "格式检测"
         info["note"] = info["key_layout"]["note"]
         info["category"] = "不兼容"
         info["category_source"] = "格式检测"
         return info
 
-    cat = lora_category(name, meta, path)
+    cat = lora_category(name, meta, path, facts)
     # An explicit local name beats inference. If the alias says 画质增强 then the
     # LoRA belongs in that group, whatever the heuristics concluded - the user
     # naming it is stronger evidence than a filename guess.
@@ -925,6 +1048,7 @@ def classify_lora(path: str, alias: str = "", alias_over: dict | None = None) ->
     # 别名表里若已明确指定分类（来自 C站原文核对），直接采用，不再靠关键词猜
     if isinstance(alias_over, dict) and alias_over.get("kind"):
         info["kind"] = alias_over["kind"]
+        info["kind_source"] = "你标的"
         info["category"] = alias_over.get("category") or info.get("category")
         info["category_source"] = "C站原文核对"
         info["label"] = {"character": "角色", "style": "画风",
@@ -970,6 +1094,111 @@ def lora_aliases() -> dict:
         return {}
 
 
+# ★ 随包发布的 LoRA「事实目录」。
+#
+# 为什么需要它：发布版原来**没有任何分类数据** —— `lora_aliases.json` 是作者的
+# 私人备注（手工核对过的分类），永远不进发布包，发的是空模板。于是陌生用户装完
+# 以后分类只剩「文件名关键词 + 训练元数据」两层硬猜，而文件名是 hash 的
+# （`8be1e5d2cc7cd938037337603fb51565.safetensors`）连猜都猜不了，猜错还不报错。
+#
+# 这个文件里**只放事实**：按 SHA256 从 C站反查回来的作者真名 / 版本 / 底模 /
+# 作者声明的触发词 / 链接。分类判断不进去（那是编辑判断，留在私人备注里）。
+CATALOG_FILE = os.path.join(HERE, "lora_catalog.json")
+# (数据, 用来判失效的 (mtime_ns, size), 同一个数据) —— 第三个位置存"读出来
+# 的东西"，读失败时它是 `{}`，第二个位置是 None，于是下次调用会重试一次。
+_CATALOG_CACHE = ({}, None, {})
+
+
+def _catalog_load() -> dict:
+    """读目录文件。按 mtime 缓存 —— 这个函数在每次 /api/capabilities 里都会走。
+
+    两个 except 这样分的理由（原来写反了，`FileNotFoundError` 那一支**永远
+    执行不到** —— 它是 `OSError` 的子类，先被上面那条吃掉）：
+      · `OSError`：文件不在（发布版用户自己没生成过）或没权限 —— **正常的**，
+        静默返回空目录，分类自动退回到文件名/元数据。
+      · 其它异常：文件在、但内容是坏 JSON —— 这是**真出事了**，要说一声，
+        但不能让整个 /api/capabilities 挂掉（那会让界面直接报"连不上"）。
+    """
+    global _CATALOG_CACHE
+    try:
+        st = os.stat(CATALOG_FILE)
+        key = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        _CATALOG_CACHE = ({}, None, {})
+        return {}
+    if _CATALOG_CACHE[1] == key:
+        return _CATALOG_CACHE[0]
+    data = {}
+    try:
+        with open(CATALOG_FILE, encoding="utf-8") as fh:
+            d = json.load(fh)
+        if isinstance(d, dict) and isinstance(d.get("loras"), dict):
+            data = d["loras"]
+        else:
+            warn("LoRA 目录内容不是预期的 {loras:{...}} 形状（分类退回文件名/元数据）",
+                 ValueError("顶层键 %r，loras 是 %s"
+                            % (sorted(d)[:6] if isinstance(d, dict) else type(d).__name__,
+                               type(d.get("loras")).__name__ if isinstance(d, dict)
+                               else "n/a")))
+    except Exception as e:
+        # 静默失败是这个项目最忌讳的事：目录坏了要说一声，但不该拖垮整个接口。
+        warn("读取 LoRA 目录失败（分类会退回到文件名/元数据）", e)
+        data = {}
+    _CATALOG_CACHE = (data, key, data)
+    return data
+
+
+def catalog_facts(name: str) -> dict | None:
+    """按 ComfyUI 报出来的名字（可能带子目录）在目录里找一条。
+
+    匹配顺序：完整名字 → 纯文件名 → 大小写不敏感的文件名。
+    最后那一层是为了容忍用户在 Windows 上把扩展名改成 `.SAFETENSORS` 之类。
+    """
+    if not name:
+        return None
+    cat = _catalog_load()
+    if not cat:
+        return None
+    base = os.path.basename(name.replace("\\", "/"))
+    row = cat.get(name) or cat.get(base)
+    if row is None:
+        low = base.lower()
+        for k, v in cat.items():
+            if k.lower() == low:
+                row = v
+                break
+    if not isinstance(row, dict):
+        return None
+    cv = row.get("civitai") or {}
+    if not isinstance(cv, dict):
+        return None
+    # ★ 必须有 Civitai 那一节的**真名**才算查到。只判 sha256 是不够的：
+    #   `dev/make_lora_catalog.py` 会给每个文件都写上 sha256（那是本地算的），
+    #   而 C站上真查不到模型的条目它的 `civitai` 是 null。只判 sha256 的话这种
+    #   条目会返回一个**名字全是空字符串的空壳**，于是：
+    #     · 界面上的「来源」角标会显示"C站数据"—— 其实一条 C站数据都没有，
+    #       这是在拿本地哈希冒充 C站事实；
+    #     · 分类链会被一个空壳截胡，永远走不到文件名那一层。
+    #   宁可返回 None：查不到就是查不到，让下一层去猜。
+    if not (cv.get("model_name") or "").strip():
+        return None
+    out = {
+        "sha256": row.get("sha256") or "",
+        "bytes": row.get("bytes"),
+        "civitai_name": cv.get("model_name") or "",
+        "civitai_version": cv.get("version_name") or "",
+        "civitai_base": cv.get("base_model") or "",
+        "civitai_url": cv.get("url") or "",
+        "civitai_words": [str(x) for x in (cv.get("trained_words") or []) if str(x).strip()],
+        "civitai_tags": [str(x) for x in (cv.get("tags") or []) if str(x).strip()],
+        "words_source": cv.get("words_source") or "",
+        "weight_hint": cv.get("weight_hint") or None,
+        "version_id": cv.get("version_id"),
+        "file_meta": row.get("file_meta") or {},
+    }
+    return out
+
+
 def _lora_path(name: str) -> str | None:
     """Resolve a LoRA name (as ComfyUI lists it) to a file on disk.
 
@@ -1009,14 +1238,53 @@ def lora_details() -> list:
             # alias table is keyed on the plain filename, so try both.
             a = (aliases.get(n) or aliases.get(os.path.basename(n))
                  or aliases.get(os.path.basename(n).replace("\\", "/")) or {})
+            # 随包发布的 C站目录（只存事实）。查不到就是 None，退回到原有三层。
+            cf = catalog_facts(n)
             # the alias is passed in so classification can honour an explicit
             # local name instead of only guessing from the filename
-            info = classify_lora(p, alias=(a.get('alias') or '').strip(), alias_over=a)
+            info = classify_lora(p, alias=(a.get('alias') or '').strip(),
+                                 alias_over=a, facts=cf)
             info['alias'] = (a.get('alias') or '').strip()
             info['alias_note'] = (a.get('note') or '').strip()
             info['alias_url'] = (a.get('url') or '').strip()
             info['alias_source'] = (a.get('source') or '').strip()
-            info['display'] = info['alias'] or info['file']
+            if cf:
+                # 作者真名只在**用户没自己命名**时才拿来当显示名 —— 本地命名
+                # 是用户自己的话，优先级永远高于 C站。
+                info['catalog_name'] = cf['civitai_name']
+                info['catalog_version'] = cf['civitai_version']
+                info['catalog_url'] = cf['civitai_url']
+                info['catalog_base'] = cf['civitai_base']
+                info['catalog_tags'] = cf['civitai_tags']
+                info['catalog_sha256'] = (cf['sha256'] or '')[:12]
+                info['catalog_weight_hint'] = cf['weight_hint']
+                info['display'] = (info['alias'] or cf['civitai_name']
+                                   or info['file'])
+                # 备注：用户自己写的永远优先；没写才用 C站的版本名兜一句。
+                if not info['alias_note'] and cf['civitai_version']:
+                    info['catalog_note'] = "C站版本：%s" % cf['civitai_version']
+                if not info['alias_url']:
+                    info['alias_url'] = cf['civitai_url']
+                if not info['alias_source']:
+                    info['alias_source'] = "C站目录"
+                # 作者声明的触发词优先于训练元数据推断 —— 后者常常只是训练样本
+                # 图的标签，会误报。目录里的触发词还额外标了**来源**（字段还是
+                # 正文），这样"字段为空"不会被当成"作者没写"。
+                if cf['civitai_words']:
+                    td = dict(info.get('trigger_detail') or {})
+                    td['all'] = list(cf['civitai_words'])
+                    td['candidates'] = td['all']
+                    td['confident'] = True
+                    td['auto'] = True
+                    td['note'] = ("作者声明的触发词（来源：%s，按文件 SHA256 定位）"
+                                  % (cf['words_source'] or "C站原文"))
+                    info['trigger_detail'] = td
+                    info['triggers'] = td['all']
+                    info['triggers_source'] = "C站作者声明"
+                info['civitai_model'] = cf['civitai_name']
+                info['civitai_version'] = cf['civitai_version']
+            else:
+                info['display'] = info['alias'] or info['file']
             # 作者声明的触发词（通过文件哈希从 C站原文精确取得）优先于
             # 训练元数据推断 —— 后者常常只是训练样本图的标签，会误报。
             src_trig = a.get('triggers_source')
@@ -1029,8 +1297,13 @@ def lora_details() -> list:
                 td['note'] = "作者声明的触发词（来源：C站原文，按文件哈希定位）"
                 info['trigger_detail'] = td
                 info['triggers'] = td['all']
-            info['civitai_model'] = a.get('civitai_model') or ''
-            info['civitai_version'] = a.get('civitai_version') or ''
+            # ★ 别名表里没写的时候**不要用空串覆盖** —— 上面刚填好的目录信息会被
+            #   抹掉。原来这里无条件赋值，那个 `or ''` 就是元凶：目录里的真名和
+            #   版本刚写进 info，紧接着被 '' 覆盖，界面上什么都看不到。
+            if a.get('civitai_model'):
+                info['civitai_model'] = a['civitai_model']
+            if a.get('civitai_version'):
+                info['civitai_version'] = a['civitai_version']
             out.append(info)
         else:
             out.append({"file": n, "kind": "unknown", "label": "未识别",
@@ -1782,7 +2055,7 @@ def run_graph(graph: dict, out_dir: str, stem: str, timeout_s: int = 900) -> lis
                             if os.path.isfile(fp) and fp.startswith(stage_root + os.sep):
                                 os.remove(fp)
                         except Exception as e:
-                            warn("清理中转文件失败(L663)", e)
+                            warn("清理中转文件失败", e)
                 if not saved:
                     raise RuntimeError("任务完成但没有产出图片")
                 return saved
@@ -1821,9 +2094,9 @@ def _meta_texts(raw: bytes) -> dict:
                     out.setdefault("parameters", uc[8:] if uc[:4] in
                                    ("ASCII", "UNICO", "JIS  ") else uc)
             except Exception as e:
-                warn("读 EXIF 失败(L1611)", e)
+                warn("读 EXIF 失败", e)
     except Exception as e:
-        warn("读图片元数据失败(L1613)", e)
+        warn("读图片元数据失败", e)
     return out
 
 
@@ -2084,7 +2357,7 @@ def read_image_meta(raw: bytes) -> dict:
             meta = parse_comfy_meta(texts["prompt"])
             meta["kind"] = "comfy"
         except Exception as e:
-            warn("解析图里的工作流失败(L1761)", e)
+            warn("解析图里的工作流失败", e)
             notes.append("工作流 JSON 解析失败：%s" % e)
     if meta is None and texts.get("parameters"):
         meta = parse_a1111_parameters(texts["parameters"])
@@ -2371,7 +2644,7 @@ class Handler(BaseHTTPRequestHandler):
                                   time.localtime(os.path.getmtime(os.path.abspath(__file__)))))
                 data = data.replace(b"<!--BUILD-->", stamp.encode("utf-8"))
             except Exception as e:
-                warn("注入构建戳失败(L1893)", e)
+                warn("注入构建戳失败", e)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
@@ -2600,6 +2873,80 @@ class Handler(BaseHTTPRequestHandler):
                     _paths.save_config({"checkpoint": val})
                     CHECKPOINT = val      # 内存里的也要跟着变，否则本进程还在用旧的
                 self._json({"ok": True, "key": key, "value": val})
+            except Exception as e:
+                self._json({"ok": False, "error": _err_text(e)}, _err_code(e))
+            return
+
+        if path == "/api/lora_alias":
+            """给某个 LoRA 存一条**用户自己**的命名/分类，写进 lora_aliases.json。
+
+            为什么需要这个写入口：分类链最高一层是"C站目录"（随包发布的公开事实），
+            但它只覆盖得住在 C站上找得到的 LoRA —— 用户自己融合的、从别处下的、
+            改过名的，目录里查不到，那条就只能靠文件名猜。**用户自己知道那是什么**，
+            所以必须有条路让他把判断存下来。
+
+            三个安全点：
+              · 文件名必须在 ComfyUI 真的列得出来的 LoRA 里 —— 否则这个接口就成了
+                "往用户 json 里塞任意键"的入口。
+              · 只认下面这几个键（白名单），verdict 值也要在集合里。写进去的
+                `kind` 是会被前端直接拿去分组的，随便一个字符串会让那个 LoRA
+                从界面上消失（分组里找不到它）—— 所以要挡。
+              · 走 `paths.save_json`（原子写 + 读不出来先备份）。用户这份文件里
+                有他手写的全部备注，不能因为界面点一下就毁掉。
+            """
+            try:
+                fname = str(body.get("file") or "").strip()
+                if not fname:
+                    self._json({"ok": False, "error": "缺少 file 参数"}, 400)
+                    return
+                try:
+                    names = object_info_choices("LoraLoader", "lora_name")
+                except Exception as e:
+                    self._json({"ok": False,
+                                "error": "现在连不上 ComfyUI，改不了（%s）"
+                                         % _err_text(e)}, 503)
+                    return
+                base = os.path.basename(fname.replace("\\", "/"))
+                hit = fname if fname in names else (
+                    base if base in names else None)
+                if hit is None:
+                    self._json({"ok": False,
+                                "error": "ComfyUI 的 LoRA 列表里没有这个文件：%s"
+                                         % fname}, 400)
+                    return
+                KINDS = {"", "character", "style", "quality", "other"}
+                alias = str(body.get("alias") or "").strip()[:40]
+                kind = str(body.get("kind") or "").strip()
+                if kind not in KINDS:
+                    self._json({"ok": False,
+                                "error": "分类只能是 %s 之一，收到的是 %r"
+                                         % ("/".join(sorted(KINDS - {""})), kind)},
+                               400)
+                    return
+                if "\n" in alias or "\r" in alias:
+                    self._json({"ok": False, "error": "名字里不能有换行"}, 400)
+                    return
+                # ★ 读一遍现文件再改一个键 —— 不能拿内存里的副本整体覆盖：
+                #   进程跑着的这段时间用户可能自己编辑过那个文件。
+                cur = lora_aliases()
+                entry = dict(cur.get(hit) or {})
+                if alias:
+                    entry["alias"] = alias
+                else:
+                    entry.pop("alias", None)
+                if kind:
+                    entry["kind"] = kind
+                    entry["source"] = entry.get("source") or "手动"
+                else:
+                    entry.pop("kind", None)
+                if entry:
+                    cur[hit] = entry
+                else:
+                    cur.pop(hit, None)
+                import paths as _paths
+                _paths.save_json(ALIAS_FILE, cur)
+                self._json({"ok": True, "file": hit, "alias": alias,
+                            "kind": kind, "saved_to": ALIAS_FILE})
             except Exception as e:
                 self._json({"ok": False, "error": _err_text(e)}, _err_code(e))
             return
@@ -2908,7 +3255,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     os.remove(os.path.join(COMFY_INPUT, staged))
                 except Exception as e:
-                    warn("清理上传文件失败(L818)", e)
+                    warn("清理上传文件失败", e)
                 self._json({"ok": True, "files": files,
                             "from": [w0, h0], "to": [tw, th]})
             except BadParam as e:

@@ -351,12 +351,41 @@ python check_env.py
   （不会自动加，由你决定用哪一组）
 - 图里的 LoRA 也会记进 PNG，拖回界面能还原
 
-### LoRA 中文名与备注（要改文件）
+### 每个 LoRA 下面那行小字是什么
 
-备注文件是项目根目录的 `lora_aliases.json`，**要你自己用记事本改**
-（界面上的 LoRA 面板只**显示**这些备注，没有编辑器 —— **界面里是改不了的**）。
-写上 `alias` 之后，提示词里直接打那个中文名字就能调用它 —— 再也不用记
-`Hoseki_ZenlessZoneZero_MiyabiHoshimi_IllustriousXL_v2` 这种名字了。
+每一条 LoRA 下面都会显示**它是靠什么被判断出来的**，一眼能看出靠不靠谱：
+
+| 面板上写的 | 意思 | 要不要管它 |
+|---|---|---|
+| `来源：你标的` | 你自己在界面里改过名字/分类 | 不用，以你为准 |
+| `来源：C站数据` | 用文件指纹从 Civitai 查到的公开信息 | 一般都对 |
+| `来源：文件元数据推的` | 从模型文件自带的说明里推的 | 有时会偏，可以自己改 |
+| `来源：文件名猜的` | 只看文件名猜的（名字里带 `style`/`character` 之类） | ⚠️ 容易猜错，建议改 |
+| `来源：按体积猜的` / `没判断出来` | 什么线索都没有 | ⚠️ 建议自己标一下 |
+
+同一行里还会带上查到的 **C站真名**、**底模**、**作者推荐权重**、**`#标签`** ——
+文件名是一串哈希（`8be1e5d2….safetensors`）的时候，只有这几样能告诉你
+"这到底是个什么东西"。
+
+LoRA 下拉框里中文名后面也会写一句它是哪来的（`（748cm画风 · C站自动）`、
+`（我的角色 · 你改的）`），免得分不清"这个名字是我自己起的还是软件自动填的"。
+
+### 分类猜错了 / 想给 LoRA 起中文名：点「改名字/分类」
+
+不需要手动改文件了。每条 LoRA 下面都有一个 **「改名字/分类」** 按钮：
+
+1. 点它 → 填中文名（最多 40 字）→ 选类型（角色 / 画风 / 画质增强 / 其他）
+2. 点「保存」→ 面板当场更新，**你的判断永远压过软件的猜测**
+3. 类型选「自动判断」= 交回给软件猜
+
+写完就存在项目根目录的 `lora_aliases.json` 里（这个文件是你的私人数据，
+不会进仓库）。**不过下面这些事还是得改文件**：写详细备注（`note`）、
+填 C站链接（`url`）、手工指定触发词（`triggers_source`）—— 界面上没有这三样的
+编辑器。
+
+### LoRA 中文名与备注（要改文件的那部分）
+
+备注文件是项目根目录的 `lora_aliases.json`。
 
 包里那个 `lora_aliases.example.json` 是个空的 `{}` —— **复制一份、改名成
 `lora_aliases.json`**，然后照着这个写：
@@ -367,7 +396,8 @@ python check_env.py
     "alias": "我的角色",
     "note": "某个角色，秋叶校服那套\n（说明里可以换行）",
     "url": "https://civitai.com/models/123456",
-    "triggers_source": ["example_char", "blue eyes"]
+    "triggers_source": ["example_char", "blue eyes"],
+    "kind": "character"
   }
 }
 ```
@@ -378,6 +408,7 @@ python check_env.py
 | `note` | 鼠标停在选项上、以及展开后的说明文字（支持换行） |
 | `url` | 一个「C站原帖 ↗」链接 |
 | `triggers_source` | 触发词列表，每个后面跟一个「填入」按钮 |
+| `kind` | 手动指定分类：`character` / `style` / `quality` / `other`（界面里点按钮写的就是这个键） |
 | `source` | 不用管，是自动标注过来源的标记 |
 
 > ⚠️ 只有上面这几个键有用。**拼错键名不会有任何报错**，只是面板上什么都不出现
@@ -387,6 +418,28 @@ python check_env.py
 
 > 装 LoRA 前可以看 `check_env.py` 的输出 —— 它会标出**格式不兼容的 LoRA**
 > （加载了但不生效），这种最容易误以为是模型问题。
+
+### 内置的 LoRA 资料库（`lora_catalog.json`）
+
+包里带了一个 `lora_catalog.json`，是**作者机器上那 22 个 LoRA 的公开资料**
+（模型真名 / 底模 / 作者声明的触发词 / 标签 / 链接，按文件 SHA256 存，
+**不含任何本机路径**）。作用是：你装了同一个 LoRA 时，界面能自动显示它的真名、
+底模和触发词，分类也更准，不用你自己一个个查。
+
+- **装了别的 LoRA？** 完全不影响 —— 查不到就自动退回"文件元数据 → 猜文件名"，
+  界面上会照实写「来源：文件名猜的」，不会瞎编一个来源给你。
+- **想给更多 LoRA 生成资料？** 把自己的 LoRA 放进 `models\loras\`，然后在项目
+  目录里跑：
+
+  ```
+  python dev/make_lora_catalog.py            # 算哈希 + 查 C站，生成 lora_catalog.json
+  python dev/make_lora_catalog.py --enrich   # 文件没变，只重新抓一遍 C站信息
+  python dev/make_lora_catalog.py --no-net   # 不联网，只用文件里的信息
+  ```
+
+  它需要联网访问 Civitai。生成的 `lora_catalog.json` 可以直接留着自用，
+  也可以发给作者合进下一版。
+- **不想要它可以删掉** —— 删了只是分类变回"猜"，其他功能一律不受影响。
 
 ---
 
@@ -648,6 +701,8 @@ snakeer-drawing-comfyui/
 ├── check_env.py          环境自检
 ├── run_tests.py          测试入口
 ├── config.json           你的配置（从 config.example.json 复制）
+├── lora_aliases.json     你的 LoRA 中文名/备注（从 lora_aliases.example.json 复制）
+├── lora_catalog.json     内置的 LoRA 公开资料库（可删，删了只是分类变回猜）
 ├── 高频词表.txt           22 章中文词表
 ├── data/                 标签库
 └── tests/                测试

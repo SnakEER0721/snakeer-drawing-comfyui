@@ -67,6 +67,12 @@ FAST = [
     "test_checkpoint_switch.py",  # 回归：底模选了哪个就用哪个（含 null 的坑）
     "test_save_config.py",      # 回归：写回 config.json 只改指定键、保换行、原子写
     "test_set_config_e2e.py",   # 端到端：界面上换底模真的写回配置文件（测完还原）
+    "test_lora_alias_e2e.py",   # 端到端：给自己 LoRA 改名字/分类真的写进 lora_aliases.json（测完还原）
+    "test_lora_catalog.py",     # 回归：随包发布的 lora_catalog.json —— 查找/降级/三层优先级/原子写
+                                #       （临时目录里造目录文件与最小 safetensors，不碰真实数据）
+    "test_lora_ui_e2e.py",      # 端到端：真浏览器 —— 面板上的「来源」角标、C站真名、
+                                #       「改名字/分类」对话框真的写进了 lora_aliases.json（测完还原）
+    "test_alias_source_label.py",  # 回归：中文名后面那个来源短标签（空串不许乱加、认不出不许猜）
     "test_origin_guard.py",     # 回归：跨源请求 / 假 Host 必须挡住，本机脚本放行
     "test_comfy_down.py",       # 回归：ComfyUI 没开时要给"照着改"的话，不是 URLError 原文
     "test_client_abort.py",     # 回归：浏览器关连接时不许往控制台吐 traceback（自带对照组）
@@ -94,6 +100,7 @@ BROWSER = [
     "test_smoke_page.py",       # 真浏览器打开页面
     "test_read_meta_ui.py",     # 真浏览器丢图进去
     "test_viewer_ui.py",        # 真浏览器点图/翻页
+    "test_lora_ui_e2e.py",      # 真浏览器看 LoRA 面板的角标 / 改名字对话框
     "test_browser_isolation.py",  # 真浏览器（这条本身是查浏览器进程隔离的）
     "test_browser_cleanup.py",  # 真浏览器（这条本身是查残留清理的）
 ]
