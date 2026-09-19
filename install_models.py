@@ -369,10 +369,36 @@ def main() -> int:
     print()
     print("【1】模型目录")
     md = paths.MODELS_DIR
+    # ★ 来源**照 paths 记的念**，不要在这里自己拼一句"来自：自动探测 / 环境变量"。
+    #   原来那行是猜的：config.json 里没填就一律印"自动探测 / 环境变量"，
+    #   而真实情况可能是"自动探测一个都没探到，退回了兜底" —— 印出来的那句话
+    #   正好把最需要看见的那件事盖掉。
+    src = getattr(paths, "DIR_SOURCE", {}).get("models 根目录", "")
     print("  %s" % md)
-    print("  （来自：%s）" % (
-        "config.json 的 models_dir" if (paths.CONFIG.get("models_dir") or "").strip()
-        else "自动探测 / 环境变量 COMFYUI_MODELS"))
+    print("  （来自：%s）" % (src or "未记录"))
+
+    # ★ 判据是**来源**，不是"目录在不在"。
+    #   两件事都能退 2，但原因完全不同：目录不存在（下面那条），和目录存在但
+    #   它是兜底 —— 自动探测没探到时 paths 会退回软件自己的 `models` 目录，
+    #   脚本随后**自己把它建出来**，于是它"存在"了，接着就把 14 GB 模型搬进一个
+    #   ComfyUI 根本不读的地方，还打印"装好了"。用户下次出图照旧"找不到底模"，
+    #   而且完全不知道该怀疑哪一步。
+    #   ★ 顺序踩过坑：第一版把这段放在 `isdir` 判断**后面**，而"目录不存在"那条
+    #     路已经先 return 了 —— 于是这段永远执行不到（死代码，
+    #     dev/simulate_fresh_install.py 的【6】节当场抓出来）。
+    #     必须放在 `isdir` 之前。
+    if src.startswith("兜底"):
+        print()
+        print("!! 自动探测没找到你的 ComfyUI 模型目录，退回了一个兜底位置。")
+        print("   ComfyUI 不读这里 —— 把模型搬进去也没用，出图照旧找不到。")
+        print("   两种可能：")
+        print("     a) ComfyUI 还没启动过 —— 先启动一次 ComfyUI Desktop，")
+        print("        它会把自己真正在用的目录写下来，重跑本脚本就能认出来")
+        print("     b) ComfyUI 装在别的地方（便携版、装在别的盘）—— 编辑 config.json，")
+        print("        把 models_dir 填成你的 ComfyUI 里那个 models 目录")
+        print("   改完重跑本脚本。")
+        return 2
+
     if not os.path.isdir(md):
         print()
         print("!! 这个目录不存在，脚本不敢往下走。")

@@ -77,6 +77,8 @@ FAST = [
     "test_comfy_down.py",       # 回归：ComfyUI 没开时要给"照着改"的话，不是 URLError 原文
     "test_client_abort.py",     # 回归：浏览器关连接时不许往控制台吐 traceback（自带对照组）
     "test_broken_config.py",    # 回归：config.json 坏了不能静默回退；带 BOM 的要能读
+    "test_paths_detect.py",     # 回归：自动探测要认桌面版自己写下的路径（模型搬到 D 盘、
+                                #        Portable 版 COMFYUI_ROOT 的优先级），全程临时目录
     "test_version.py",          # 回归：版本号只有一个来源，页头显示的是它
     "test_install_models.py",   # 安装脚本：搬对了没有、认不出的不动、不碰真实数据
     "test_bats.py",             # 回归：两个 .bat 的编码/换行/找 Python（含真 cmd 试跑）

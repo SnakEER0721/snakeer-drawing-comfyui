@@ -97,6 +97,12 @@ else:
     warn("没有 config.json", "会走自动探测；建议复制一份 config.example.json 改名")
 
 try:
+    # ★ paths 要单独 import：`server` 只是把 paths 的值搬过去用，**没有**把
+    #   DIR_SOURCE 转出去。实测踩过 —— 这里写成 `S.DIR_SOURCE` 时
+    #   getattr 一路拿到默认值 ""，于是来源说明静默地一个字都不打，
+    #   而"路径是哪来的"正是这段输出**唯一想说的事**。
+    #   不写 getattr(S, "DIR_SOURCE", {}) 那种兜底：那样它永远不会报错。
+    import paths as P
     import server as S
 except Exception as e:
     print()
@@ -124,8 +130,13 @@ for label, path, need_write, level in (
         #   不附带任何 LoRA。用户会以为整个装坏了。
         ("models 根目录", S.MODELS_DIR, False, "warn"),
         ("LoRA 目录", S.LORA_DIR, False, "warn")):
+    # ★ 把"这个路径是哪来的"一起打出来。探测不到时它会静默退回应用目录下的
+    #   兜底，用户只看到"路径不对"，不知道**是哪一层给的**、该去改哪里。
+    #   自动探测失败时还要告诉他探测过哪些地方、去哪儿看真答案。
+    src = P.DIR_SOURCE.get(label, "")
+    hint_src = "（%s）" % src if src else ""
     if os.path.isdir(path):
-        ok("%s 存在: %s" % (label, path))
+        ok("%s 存在: %s%s" % (label, path, hint_src))
         if need_write:
             probe = os.path.join(path, "_write_test.tmp")
             try:
@@ -135,10 +146,17 @@ for label, path, need_write, level in (
             except Exception as e:
                 fail("%s 不可写: %s" % (label, e), "检查权限或换个目录")
     elif level == "fail":
-        fail("%s 不存在: %s" % (label, path),
-             "改 config.json 指向正确位置，或先启动一次 ComfyUI 让它创建")
+        if src.startswith("兜底"):
+            fail("%s 不存在: %s%s" % (label, path, hint_src),
+                 "自动探测没找到 ComfyUI 的目录，于是退回了软件自己的目录，"
+                 "而那个目录不存在。最省事的办法：启动一次 ComfyUI 桌面版，"
+                 "它会把自己用的目录写进 %%APPDATA%%\\Comfy Desktop\\settings.json，"
+                 "再跑一次本自检就有了；或者直接在 config.json 里填对路径")
+        else:
+            fail("%s 不存在: %s%s" % (label, path, hint_src),
+                 "改 config.json 指向正确位置，或先启动一次 ComfyUI 让它创建")
     else:
-        warn("%s 不存在: %s" % (label, path),
+        warn("%s 不存在: %s%s" % (label, path, hint_src),
              "出图不受影响，但相关功能会缺（LoRA 面板会是空的）。"
              "改 config.json 指向正确位置，或先启动一次 ComfyUI 让它创建")
 

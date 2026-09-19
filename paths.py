@@ -218,55 +218,254 @@ def save_json(path: str, data, indent: int = 1) -> None:
     os.replace(tmp, path)
 
 
+def _desktop_conf_dirs() -> list:
+    """ComfyUI Desktop 把它的数据放在哪几个目录（ROAMING/APPDATA）。
+
+    Windows: %APPDATA%\\Comfy Desktop     （实测本机就是这个）
+    macOS/Linux: Electron 的 app.getPath("userData")
+
+    三种都列出来、哪个在就用哪个 —— 找不到就是空列表。
+    顺带认一下 data-location.json：桌面版有个 dev 模式会把数据放别处
+    （{"mode":"local-appdata"} 是常规；别的值我们认不出来，就不猜）。
+    """
+    out = []
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        out.append(os.path.join(appdata, "Comfy Desktop"))
+    home = os.path.expanduser("~")
+    out.append(os.path.join(home, "Library", "Application Support",
+                            "Comfy Desktop"))            # macOS
+    out.append(os.path.join(home, ".config", "Comfy Desktop"))  # Linux
+    return [p for p in out if p and os.path.isdir(p)]
+
+
+def _read_desktop_settings() -> list:
+    """读桌面版 settings.json，返回 [(类型, 路径), ...]。
+
+    类型是 "models" / "input" / "output" / None —— None 表示"这是一个
+    可能的安装根目录，去它下面找 models/input/output 子目录"。
+
+    ★ 为什么不能按文件夹名字去认（这一版踩过）：
+      我第一版写成"路径最后一段叫 output 才算输出目录"，于是用户把输出目录
+      取名叫 `D:\\comfyout` 时**认不出来**，白白浪费了配置里写着的答案。
+      真正可靠的做法是**看这个值挂在哪把钥匙上**：`outputDir` 就是输出目录，
+      跟它叫什么都不相干。测试 `tests/test_paths_detect.py` 钉的就是这条。
+
+    ★ 为什么这个文件最可信：**是用户在桌面版界面里选的**，不是我们猜的。
+      用户把模型挪到 D 盘、把输出改成 D:\\comfyout，答案就写在这里。
+      我们的自动探测再怎么加猜法，都不如直接问他一句。
+
+    读不出来/格式不认识**一律返回空**，绝不出声 —— 这只是一条"锦上添花"的
+    探测路径，文件不存在（没装桌面版）是完全正常的。半路报错会把用户吓到，
+    而且真正的兜底在下面。
+    """
+    found = []
+    for conf in _desktop_conf_dirs():
+        path = os.path.join(conf, "settings.json")
+        try:
+            with open(path, encoding="utf-8-sig") as fh:
+                d = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(d, dict):
+            continue
+
+        # modelsDirs：桌面版支持多个模型目录，第一个是默认那个。
+        # 它按约定就叫 ...\models，但也可能被改过名 —— 认不出来就当根目录试。
+        md = d.get("modelsDirs")
+        if isinstance(md, str):
+            md = [md]
+        if isinstance(md, list):
+            for p in md:
+                if isinstance(p, str) and p.strip():
+                    p = p.strip()
+                    key = ("models" if os.path.basename(
+                        p.rstrip("\\/")).lower() == "models" else None)
+                    found.append((key, p))
+        for key, name in (("input", "inputDir"), ("output", "outputDir")):
+            v = d.get(name)
+            if isinstance(v, str) and v.strip():
+                found.append((key, v.strip()))
+
+        # installDir：桌面版装在别的盘时，它的 input/output/models 跟着走
+        v = d.get("installDir")
+        if isinstance(v, str) and v.strip():
+            found.append((None, v.strip()))
+    return found
+
+
+def _shared_model_base_paths() -> list:
+    """从桌面版生成的 `shared_model_paths.yaml` 里抠出所有 `base_path`。
+
+    ★ 为什么还要看这个 yaml：它就是**ComfyUI 启动时真正吃进去的那份**。
+      实测 ComfyUI 的启动命令行里有
+      `--extra-model-paths-config ...\\instance-model-paths\\inst-*.yaml`，
+      那些 yaml 是这份的按实例副本；桌面版的 settings.json 和它一般一致，
+      但万一不一致，**以 ComfyUI 真正读的那份为准**。
+      而且桌面版支持"多个模型目录"，其它的 base_path 也会出现在这里。
+
+    不装 PyYAML：这个文件的格式是桌面版自己生成的，很规整，一行一条
+    `base_path: '...'`，用正则抠足够。装了 PyYAML 也不许 import ——
+    用户机器上不一定有，**不能让我们多一个依赖**。
+    """
+    out = []
+    for conf in _desktop_conf_dirs():
+        path = os.path.join(conf, "shared_model_paths.yaml")
+        try:
+            with open(path, encoding="utf-8-sig", errors="replace") as fh:
+                text = fh.read()
+        except Exception:
+            continue
+        for line in text.splitlines():
+            s = line.strip()
+            if not s.startswith("base_path:"):
+                continue
+            v = s.split(":", 1)[1].strip().strip("'\"")
+            # yaml 里 Windows 路径可能是 C:\x\y（单引号内不转义）或 C:\\x\\y
+            v = v.replace("\\\\", "\\")
+            if v:
+                out.append(v)
+    return out
+
+
+def _desktop_install_roots() -> list:
+    """从桌面版 installations.json 里找出每个实例装在哪个盘。
+
+    装到 D 盘时（桌面版允许），附带的东西 —— 它自己的 `models` 兜底目录、
+    `input` / `output` —— 会跟着那个 installPath 走，而不是 %LOCALAPPDATA%。
+    调用方会在这些根目录下面找 models/input/output 子目录。
+    """
+    out = []
+    for conf in _desktop_conf_dirs():
+        try:
+            with open(os.path.join(conf, "installations.json"),
+                      encoding="utf-8-sig") as fh:
+                d = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(d, list):
+            continue
+        for inst in d:
+            if not isinstance(inst, dict):
+                continue
+            p = inst.get("installPath")
+            if isinstance(p, str) and p.strip():
+                out.append(p.strip())
+    return out
+
+
 def _detect_comfy_dirs() -> dict:
     """按 ComfyUI Desktop 的常见布局找 input / output / models。
 
     找不到就返回 None，由 config.json 或调用方补上。
     只认这几个位置，不做全盘搜索 —— 扫盘又慢又可能读到自己没权限的目录。
+
+    ★ 为什么还要去读 ComfyUI Desktop 自己的配置文件（下面 Settings.json 那段）：
+      前面那几条路都是**猜目录在哪**，只在"用户把模型放在默认位置"时猜得中。
+      桌面版允许把模型目录、输入目录、输出目录整个挪到别的盘（模型动辄 20 GB，
+      换到 D 盘是常态），挪完以后它就写在 `%APPDATA%\\Comfy Desktop\\settings.json`
+      的 `modelsDirs` / `inputDir` / `outputDir` 里 —— 那是**用户自己指定的答案**，
+      比任何猜测都准，而且不用用户再教我们一遍。
+      实测（一台把 models 放在 C 盘、output 放在 D:\\comfyout 的机器，见
+      `dev/probe_paths_detect.py`）：只靠猜，output 会猜错、模型目录猜对；
+      读了这个文件之后两个都对上了。
     """
     found = {"input": None, "output": None, "models": None}
-    roots = []
+
+    # ---- ① 按"谁说了算"排好序，一个一个问，先答的算数 --------------------
+    #   顺序就是优先级，**从最明确到最靠猜**：
+    #     1. COMFYUI_ROOT          —— 用户/README 专门为便携版设的开关，一句明确的指令
+    #     2. settings.json         —— 用户在桌面版界面里选的（modelsDirs/inputDir/outputDir）
+    #     3. shared_model_paths.yaml —— ComfyUI 启动时真正吃进去的那份
+    #     4. installations.json    —— 桌面版装在别的盘时，附带目录跟着走
+    #     5. %LOCALAPPDATA% 默认位置 —— 纯猜，最不靠谱，放最后
+    #   ★ 实测踩过（tests/test_paths_detect.py 钉着）：我第一版把第 1 条排在第 3
+    #     条后面，于是"用户明确指定的便携版目录"被 YAML 里读出来的值抢走了 ——
+    #     **只把 roots 排序不够，三路答案必须合成同一条有序链**。
+    # 1. 明确的开关：COMFYUI_ROOT —— **单独一批，第一个问，谁都不许抢**
+    explicit = []
+    for extra in (os.environ.get("COMFYUI_ROOT"),):
+        if extra:
+            explicit.append((None, extra))       # None = 去它下面找 models/input/output
+    # 2. 桌面版 settings.json：key 已经说清"这是什么目录"，直接用
+    # 3. yaml 里的 base_path 是模型根目录（ComfyUI 真正读的那份）
+    # 4. installations.json：桌面版装在别的盘时附带目录跟着走
+    # 5. %LOCALAPPDATA% 默认位置：纯猜，最不靠谱，放最后
+    sources = list(_read_desktop_settings())
+    for p in _shared_model_base_paths():
+        sources.append(("models", p))
+    for p in _desktop_install_roots():
+        sources.append((None, p))
     local = os.environ.get("LOCALAPPDATA", "")
     if local:
         base = os.path.join(local, "Comfy-Desktop")
-        roots.append(os.path.join(base, "ComfyUI-Shared"))
+        sources.append((None, os.path.join(base, "ComfyUI-Shared")))
         inst = os.path.join(base, "ComfyUI-Installs")
         if os.path.isdir(inst):
             for name in os.listdir(inst):
-                roots.append(os.path.join(inst, name, "ComfyUI", "ComfyUI"))
-    # 便携版 / 手动安装：由环境变量指定
-    for extra in (os.environ.get("COMFYUI_ROOT"),):
-        if extra:
-            roots.append(extra)
-    for r in roots:
-        if not r or not os.path.isdir(r):
-            continue
-        for key, sub in (("models", "models"), ("input", "input"), ("output", "output")):
-            p = os.path.join(r, sub)
-            if found[key] is None and os.path.isdir(p):
+                sources.append((None, os.path.join(
+                    inst, name, "ComfyUI", "ComfyUI")))
+
+    # 两轮：先认"已说明这是什么目录"的，再拿剩下的当根目录试子目录。
+    # 分两轮是因为同一路来源里可能混着两种东西，一次遍历分不清谁优先。
+    # ★ COMFYUI_ROOT 自己走完整两轮，排在所有来源前面 —— 见上面那段注释。
+    for batch in (explicit, sources):
+        for key, p in batch:
+            if key and os.path.isdir(p) and found[key] is None:
                 found[key] = p
+        for key, p in batch:
+            if key is not None or not os.path.isdir(p):
+                continue
+            for k, sub in (("models", "models"), ("input", "input"),
+                           ("output", "output")):
+                cand = os.path.join(p, sub)
+                if found[k] is None and os.path.isdir(cand):
+                    found[k] = cand
     return found
 
 
 _DET = _detect_comfy_dirs()
 
 
-def _pick(config_key: str, env_key: str, detected, fallback: str) -> str:
-    return (CONFIG.get(config_key) or os.environ.get(env_key)
-            or detected or fallback)
+# 每个路径**是哪来的** —— 「配置文件 > 环境变量 > 自动探测 > 兜底」四层里命中的是哪层。
+# 为什么要有这个东西：探测不到时会静默退回应用目录下的兜底（那个目录通常不存在），
+# 用户只看到"路径不对"却不知道**是哪一层给的**，只能瞎试。
+# check_env.py 的【2】路径配置 会把这张表打出来。
+DIR_SOURCE = {}
+
+
+def _pick(config_key: str, env_key: str, detected, fallback: str,
+          what: str = "") -> str:
+    if CONFIG.get(config_key):
+        DIR_SOURCE[what] = "配置文件 config.json 里的 %s" % config_key
+        return CONFIG[config_key]
+    if os.environ.get(env_key):
+        DIR_SOURCE[what] = "环境变量 %s" % env_key
+        return os.environ[env_key]
+    if detected:
+        DIR_SOURCE[what] = "自动探测到的"
+        return detected
+    # 不写成"兜底（…）"：调用方已经会用括号把它括起来了，再带括号会变成
+    # `（兜底（自动探测没找到…））` —— 用户在自检输出里看到的就是这坨。
+    DIR_SOURCE[what] = "兜底：自动探测没找到，退回了软件自己的目录"
+    return fallback
 
 
 # ---------------------------------------------------------------- 2. ComfyUI
 # 「本地服务」的地址。不是路径，但同属"每台机器不同"的东西，放一起便于排查。
 COMFY_URL = CONFIG.get("comfy_url") or os.environ.get("COMFYUI_URL") \
     or "http://127.0.0.1:8188"
+DIR_SOURCE["ComfyUI 地址"] = (
+    "配置文件 config.json 里的 comfy_url" if CONFIG.get("comfy_url")
+    else "环境变量 COMFYUI_URL" if os.environ.get("COMFYUI_URL")
+    else "默认值（没配过；ComfyUI 装在别的端口就要改）")
 
 COMFY_INPUT = _pick("comfy_input", "COMFYUI_INPUT", _DET["input"],
-                    os.path.join(APP_DIR, "comfy_input"))
+                    os.path.join(APP_DIR, "comfy_input"), "ComfyUI input 目录")
 COMFY_OUTPUT = _pick("comfy_output", "COMFYUI_OUTPUT", _DET["output"],
-                     os.path.join(APP_DIR, "output"))
+                     os.path.join(APP_DIR, "output"), "输出目录")
 MODELS_DIR = _pick("models_dir", "COMFYUI_MODELS", _DET["models"],
-                   os.path.join(APP_DIR, "models"))
+                   os.path.join(APP_DIR, "models"), "models 根目录")
 
 # 默认底模。空 = 用下面这个兜底名，check_env.py 会告诉你装没装。
 #
