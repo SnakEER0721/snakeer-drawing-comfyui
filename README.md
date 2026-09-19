@@ -33,7 +33,9 @@
 - [模型放哪、装哪几个](#模型放哪装哪几个)
 - [模型清单](#模型清单)
 - [怎么换底模（换画风）](#怎么换底模换画风)
-- [怎么装 LoRA、LoRA 去哪找](#怎么装-lora-lora-去哪找)
+- [怎么装 LoRA / LoRA 去哪找](#怎么装-lora-lora-去哪找)
+  - [下载的 LoRA 到底放哪个文件夹](#下载的-lora-到底放哪个文件夹复制粘贴就能用)
+  - [它是怎么被分类的（四层判定）](#它是怎么被分类的四层判定从最可信往下)
 - [界面怎么用](#界面怎么用)
 - [配置文件](#配置文件)
 - [出图存哪](#出图存哪)
@@ -224,21 +226,38 @@ python check_env.py
 `刚需模型` 文件夹，把里面**所有文件**丢进本目录下的 `刚需模型全部放这`
 （名字不一样没关系，它只是个中转站），然后双击 `安装模型.bat` 即可。
 
-| 文件 | 大小 | 作用是 | 必需 |
-|---|---|---|---|
-| `Illustrious-XL-v2.0.safetensors` | 6.5 GB | **底模**（Illustrious-XL 官方 v2.0），没有它什么都生成不了 | ✅ |
-| `controlnet-scribble-sdxl.safetensors` | 2.3 GB | 草图：画板上手画的线，照原样锁形状（**默认就是这个**） | |
-| `controlnet-openpose-sdxl.safetensors` | 2.3 GB | 姿势：要**渲染好的骨架图**（彩色四肢）才锁得住；手画的火柴人它认不出来 | |
-| `noobaiInpainting_v10.fp16.safetensors` | 2.3 GB | 局部重绘专用，纹理和瞳色保真度明显更好 | |
-| `controlnet-union-sdxl-xinsir.safetensors` | 2.3 GB | 构图迁移（参考图 → 深度图 → 这里） | |
-| `RealESRGAN_x4plus_anime_6B.pth` | 17 MB | 放大（动漫专用，线条最干净） | |
-| `ip-adapter-plus_sdxl_vit-h.safetensors` | 0.8 GB | 参考图 | |
-| `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors` | 2.4 GB | 上面那个的配套，两个必须同时装 | |
+### 每个文件是干什么的、想自己下从哪下
+
+**最后一列是"少了它你有什么感觉"** —— 想省硬盘就按那一列砍。底模和放大模型
+是**最少能用**的组合（6.5 GB），其余都是"某个功能用不了"，不影响出图。
+
+| 文件 | 大小 | 作用是 | 少了会怎样 | 想自己下（点名字） | 下载后要改名吗 |
+|---|---|---|---|---|---|
+| `Illustrious-XL-v2.0.safetensors` | 6.5 GB | **底模**：决定画风的就是它，所有图都由它生成 | **什么图都出不来** ✅必需 | [OnomaAIResearch/Illustrious-XL-v2.0](https://huggingface.co/OnomaAIResearch/Illustrious-XL-v2.0)（官方，社区叫它"光辉"） | 不用，原名就对 |
+| `RealESRGAN_x4plus_anime_6B.pth` | 17 MB | **放大**：动漫专用超分，线条最干净、不糊边 | 界面上的「放大」用不了 | [Real-ESRGAN 官方 Release 资产直链](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth)（点开就开始下，17 MB） | 不用，原名就对 |
+| `controlnet-scribble-sdxl.safetensors` | 2.3 GB | **草图**：你在画板上手画的线，照原样锁住形状（**默认就是它**） | 「草图」用不了 | [xinsir/controlnet-scribble-sdxl-1.0](https://huggingface.co/xinsir/controlnet-scribble-sdxl-1.0) 里的 `diffusion_pytorch_model.safetensors` | **要**（改成左边这个文件名） |
+| `controlnet-openpose-sdxl.safetensors` | 2.3 GB | **姿势**：锁住人形姿势。注意要**渲染好的骨架图**（彩色四肢）才认 | 「姿势」用不了 | [xinsir/controlnet-openpose-sdxl-1.0](https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0) 里的 `diffusion_pytorch_model.safetensors` | **要**（改成左边这个文件名） |
+| `noobaiInpainting_v10.fp16.safetensors` | 2.3 GB | **局部重绘专用**：纹理、瞳色的保真度明显比通用模型好（修手、换表情） | 局部重绘还能用，但**画质差一截** | [Acly/NoobAI-Inpainting](https://huggingface.co/Acly/NoobAI-Inpainting) | 不用，原名就对 |
+| `controlnet-union-sdxl-xinsir.safetensors` | 2.3 GB | **构图迁移**：把参考图的构图搬过来（参考图 → 深度图 → 这里） | 「构图迁移」用不了 | [xinsir/controlnet-union-sdxl-1.0](https://huggingface.co/xinsir/controlnet-union-sdxl-1.0) 里的 `diffusion_pytorch_model.safetensors` | **要**（改成左边这个文件名） |
+| `ip-adapter-plus_sdxl_vit-h.safetensors` | 0.8 GB | **参考图**：把一张图的人物/风格带进新图 | 「参考图」用不了（还要装第 5 步那个节点） | [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter) 的 `sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors` | 不用，原名就对 |
+| `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors` | 2.4 GB | 上面那个参考图的**配套**，两个必须同时装 | 同上（两个缺一个都不行） | [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter) 里的 **`models/image_encoder/model.safetensors`** | **要**（改成这个名字） |
+
+> 三个 ControlNet 在 HuggingFace 上的下载文件名全都叫 `diffusion_pytorch_model.safetensors`
+> —— 一模一样，下完分不清谁是谁。**下完立刻改成表里那个名字**（这也是网盘包
+> 最省事的地方：里面已经改好了）。
+>
+> ⚠️ `CLIP-ViT-H-14-...` **别去 `laion/CLIP-ViT-H-14-laion2B-s32B-b79K` 拿** ——
+> 那个仓库里是 3.7 GB 的完整检查点（带文本编码器），ComfyUI 的 `CLIPVisionLoader`
+> 加载不了。要的是 `h94/IP-Adapter` 里那份（sha256 开头 `6ca9667d…`）。
+>
+> HuggingFace 在国内**直连不上**，需要自备网络工具 —— 所以这里还是直接给网盘
+> 最省事。各模型的许可见 [THIRD-PARTY.md](THIRD-PARTY.md)。
 
 > 体积按 Windows 资源管理器显示的那种 GB（也就是 1024 进制），和你在网盘里
 > 看到的大小应当一致。
 
-**文件名的最后一段必须一模一样** —— 脚本靠文件名认它是什么，改过名就认不出来了。
+**文件名的最后一段必须一模一样** —— 脚本靠文件名认它是什么，改过名就认不出来了；
+名字对不上它会**原样不动地列出来**让你自己判断，不会瞎搬。
 
 装完之后它们分别在 ComfyUI 的哪里（想自己手动放的话照这个表）：
 
@@ -253,26 +272,6 @@ python check_env.py
 > 手动放的时候**别改扩展名、别改成中文名**，放完**重启 ComfyUI** 才会认。
 > 拿不准就直接用 `安装模型.bat`，那是最省事的做法。
 
-<details>
-<summary>各模型的出处（想自己下最新版可以看这里）</summary>
-
-| 文件 | 出处 |
-|---|---|
-| `Illustrious-XL-v2.0` | [OnomaAIResearch/Illustrious-XL-v2.0](https://huggingface.co/OnomaAIResearch/Illustrious-XL-v2.0)（官方）的 `Illustrious-XL-v2.0.safetensors`，**文件名已经对，不用改** |
-| `noobaiInpainting_v10.fp16` | [Acly/NoobAI-Inpainting](https://huggingface.co/Acly/NoobAI-Inpainting) 的 `noobaiInpainting_v10.fp16.safetensors`，**文件名已经对，不用改** |
-| `controlnet-scribble-sdxl` | [xinsir/controlnet-scribble-sdxl-1.0](https://huggingface.co/xinsir/controlnet-scribble-sdxl-1.0) 的 `diffusion_pytorch_model.safetensors`，**下载后改名** |
-| `controlnet-openpose-sdxl` | [xinsir/controlnet-openpose-sdxl-1.0](https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0) 的 `diffusion_pytorch_model.safetensors`，**下载后改名** |
-| `controlnet-union-sdxl-xinsir` | [xinsir/controlnet-union-sdxl-1.0](https://huggingface.co/xinsir/controlnet-union-sdxl-1.0) 的 `diffusion_pytorch_model.safetensors`，**下载后改名** |
-| `RealESRGAN_x4plus_anime_6B.pth` | [Real-ESRGAN releases](https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.2.4)，**文件名已经对** |
-| `ip-adapter-plus_sdxl_vit-h` | [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter) 的 `sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors`，**文件名已经对** |
-| `CLIP-ViT-H-14-...` | [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter) 里的 **`models/image_encoder/model.safetensors`**（2.4 GB），**下载后改名成 `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors`**。<br>⚠️ **别去 `laion/CLIP-ViT-H-14-laion2B-s32B-b79K` 拿** —— 那个仓库里是 3.7 GB 的 open_clip 完整检查点（带文本编码器），ComfyUI 的 `CLIPVisionLoader` 加载不了它。要的那份 sha256 开头是 `6ca9667d…` |
-
-> HuggingFace 在国内**直连不上**，需要自备网络工具（实测 hf-mirror.com 只是
-> 跳回 huggingface.co，没有加速作用）—— 所以这里直接给网盘。
-> 各模型的许可见 [THIRD-PARTY.md](THIRD-PARTY.md)。
-
-</details>
-
 <a id="模型清单"></a>
 
 ## 模型清单
@@ -281,8 +280,9 @@ python check_env.py
 
 - 网盘里那个 `刚需模型.zip` 里就是[模型放哪、装哪几个](#模型放哪装哪几个)那节列的 8 个文件；
   `安装模型.bat` 会自动把它们放进 ComfyUI 的对应目录
-- 各模型的**出处、大小、许可以及放哪个子目录**都在上面那张表和
-  [THIRD-PARTY.md](THIRD-PARTY.md) 里
+- **每个文件干什么用、下载链接、下载后要不要改名**：见上面那张
+  [每个文件是干什么的、想自己下从哪下](#每个文件是干什么的想自己下从哪下)
+- 各模型的**许可**在 [THIRD-PARTY.md](THIRD-PARTY.md) 里
 - 只想**最少跑起来**：底模 `Illustrious-XL-v2.0.safetensors` + 放大模型
   `RealESRGAN_x4plus_anime_6B.pth` 两个文件就够（6.5 GB）
 
@@ -317,7 +317,7 @@ python check_env.py
 
 ---
 
-## 怎么装 LoRA、LoRA 去哪找
+## 怎么装 LoRA / LoRA 去哪找
 
 **LoRA = 给底模加的小补丁**（几十 MB 到几百 MB），用来加一个角色、一种画风、
 一套服装。可以同时叠好几个。
@@ -336,11 +336,76 @@ python check_env.py
 ### 怎么装（三步）
 
 1. 把下载到的 `.safetensors` 文件放进 ComfyUI 的 **`models\loras\`** 文件夹
-   - 桌面版：`...\Comfy-Desktop\ComfyUI-Shared\models\loras\`
-   - 便携版：`...\ComfyUI\models\loras\`
-   - **只放 `.safetensors`**；`.ckpt`、`.pt` 那些是给别的框架用的，这里不认
 2. **重启 ComfyUI**（LoRA 列表是它启动时读的）
 3. 刷新本工具的页面，左栏「LoRA（可叠加多个）」面板里就能看到了
+
+### 下载的 LoRA 到底放哪个文件夹（复制粘贴就能用）
+
+放错地方是这一步最常见的失败 —— 文件塞在 `下载` 里、塞在 ComfyUI 安装目录根下、
+或者塞进 `models\checkpoints\`（底模那格），界面上就永远看不到它。
+**认准路径里必须有 `models\loras`**：
+
+| 你装的是哪种 ComfyUI | 完整路径（把 `你的用户名` 换成你自己的） |
+|---|---|
+| **桌面版** | `C:\Users\你的用户名\AppData\Local\Comfy-Desktop\ComfyUI-Shared\models\loras\` |
+| **便携版** | `你解压 ComfyUI 的地方\ComfyUI\models\loras\` |
+
+要找这个文件夹的笨办法（最稳）：**在 ComfyUI 里随便出一张图，再去它的 `output`
+文件夹的上一层** —— 那一层里就有 `models`，进去找 `loras`。
+或者直接跑一次 `python check_env.py`，它会把这个目录的**完整路径打印出来**。
+
+几条硬规矩：
+
+- **只放 `.safetensors`**。`.ckpt`、`.pt` 是给别的框架用的，这里不认
+- **文件名别改**（尤其别改成中文名）。改名的唯一好处是好看，坏处是查不到 C站资料、
+  分类直接变成"文件名猜的"
+- **放完必须重启 ComfyUI** —— LoRA 列表是它启动时扫一次，之后不再看
+- **可以建子文件夹分类**（比如 `loras\角色\`）ComfyUI 认，但本工具的 LoRA 面板
+  **不按文件夹分组**，按的是下面的"分类"（角色 / 画风 / 服装…）。所以你想整齐
+  就建子文件夹，想好用就看分类对不对，两件事互不干扰
+- 放完刷新本工具的页面（**不用重启本工具**，只要页面刷新）
+
+> ⚠️ 一个 LoRA 明明放对了、界面上却没有，先看它是不是**格式不兼容** ——
+> `python check_env.py` 会标出来。这种 LoRA 能加载但不生效，最容易误判成"模型坏了"。
+
+### 它是怎么被分类的（四层判定，从最可信往下）
+
+你没有手动标过的时候，程序按下面这个顺序定类型，**前面命中就不看后面**。
+越往下的越容易猜错 —— 所以界面会把用的是哪一层直接写给你看：
+
+```
+① 你自己标的？            ✓ → 「来源：你标的」   ← 永远最高，压过下面全部
+      ↓ 没有
+② 格式不兼容？            ✓ → 「不兼容」，单独一组放最后
+      ↓ 不是
+③ 文件指纹在 C站资料库里查得到？
+      作者给的真名 → 作者挂的标签，依次比对
+                          ✓ → 「来源：C站数据」
+      ↓ 查不到 / 都对不上
+④ 模型文件里带训练元数据吗（kohya 训练时会写进去）？
+      只改图像模型、没动文本编码器 → 角色 / 概念
+      同时改了文本编码器             → 画风 / 概念
+                          ✓ → 「来源：文件元数据推的」
+      ↓ 没有元数据
+⑤ 文件名里有 style / character / pose 之类关键词吗？
+                          ✓ → 「来源：文件名猜的」
+      ↓ 没有
+⑥ 文件很小（不到 150 MB）？  → 画质增强   ┐
+      其余                        → 其他      ┘ → 「来源：按体积猜的」「没判断出来」
+```
+
+（第 ③ 层用的那个资料库随包发布，见下面[内置的 LoRA 资料库](#内置的-lora-资料库lora_catalogjson)；
+它按文件的 SHA256 认人，所以**你改了文件名也照样认得出**。）
+
+**还有一个独立的维度叫「子分类 / `category`」**（角色 / 画风 / 服装 / 姿势 /
+背景 / 概念 / 工具… 这十几个，用的是 C站那套说法），下拉框里按它的名字分组。
+它和上面的"类型"是同一批证据算出来的，绝大多数时候两者一致；
+真出现互相矛盾的时候（比如分类说是"画风"、类型却判成"画质增强"），
+**以「类型」为准** —— 这也是为什么界面上那个来源小字只跟着"类型"显示。
+
+**怎么改**：不用改文件，每条 LoRA 下面的 **「改名字/分类」** 按钮直接改，
+你的判断会**永远压过软件**（第 ① 层）。猜错了不用忍。
+
 
 ### 怎么用
 
@@ -353,7 +418,8 @@ python check_env.py
 
 ### 每个 LoRA 下面那行小字是什么
 
-每一条 LoRA 下面都会显示**它是靠什么被判断出来的**，一眼能看出靠不靠谱：
+每一条 LoRA 下面都会显示**它是靠什么被判断出来的**，一眼能看出靠不靠谱
+（这行小字对应的是上面[四层判定](#它是怎么被分类的四层判定从最可信往下)里实际命中的那一层）：
 
 | 面板上写的 | 意思 | 要不要管它 |
 |---|---|---|
@@ -361,7 +427,8 @@ python check_env.py
 | `来源：C站数据` | 用文件指纹从 Civitai 查到的公开信息 | 一般都对 |
 | `来源：文件元数据推的` | 从模型文件自带的说明里推的 | 有时会偏，可以自己改 |
 | `来源：文件名猜的` | 只看文件名猜的（名字里带 `style`/`character` 之类） | ⚠️ 容易猜错，建议改 |
-| `来源：按体积猜的` / `没判断出来` | 什么线索都没有 | ⚠️ 建议自己标一下 |
+| `来源：按体积猜的` | 文件小、又没有任何线索，只能按体积猜（不到 150 MB 猜画质增强） | ⚠️ 建议自己标一下 |
+| `来源：没判断出来` | 什么都对不上，先丢进「其他」 | ⚠️ 建议自己标一下 |
 
 同一行里还会带上查到的 **C站真名**、**底模**、**作者推荐权重**、**`#标签`** ——
 文件名是一串哈希（`8be1e5d2….safetensors`）的时候，只有这几样能告诉你
@@ -466,7 +533,7 @@ LoRA 下拉框里中文名后面也会写一句它是哪来的（`（748cm画风
 
 **右栏** —— 参数
 
-- **底模**下拉框：换底模（换完参数要自己调，见[它是什么](#它是什么)）
+- **底模**下拉框：换底模（换完参数要自己调，见[怎么换底模（换画风）](#怎么换底模换画风)）
 - 尺寸、步数、CFG、采样器、种子
 - 局部重绘的羽化、外扩
 - 草图 / 姿势 / 构图迁移 / 参考图的开关和强度
