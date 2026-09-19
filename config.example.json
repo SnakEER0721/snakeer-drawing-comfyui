@@ -1,0 +1,22 @@
+{
+  "_说明": [
+    "把这个文件改名成 config.json 再改。留空或删掉某一项 = 自动探测。",
+    "",
+    "comfy_url    : ComfyUI 服务地址，默认 http://127.0.0.1:8188",
+    "comfy_input  : ComfyUI 的 input 目录（本应用会把图和蒙版暂存进去）",
+    "comfy_output : 出图输出目录。留空 = 用 ComfyUI 自己的 output 目录",
+    "models_dir   : ComfyUI 的 models 根目录（loras/controlnet 都在它下面）",
+    "checkpoint   : 默认底模文件名，必须与 models/checkpoints 里的实际文件名一致",
+    "staging_dir  : 你下载新 LoRA 的暂存目录",
+    "port         : 网页服务端口，默认 8765。被占用时会自动往上找",
+    "",
+    "★ 先跑一遍 check_env.py，它会逐项告诉你对不对。"
+  ],
+  "comfy_url": "http://127.0.0.1:8188",
+  "comfy_input": "",
+  "comfy_output": "",
+  "models_dir": "",
+  "checkpoint": "Illustrious-XL-v2.0.safetensors",
+  "staging_dir": "",
+  "port": 8765
+}

@@ -1,0 +1,22 @@
+# 用户的私人配置（只发 config.example.json）
+config.json
+# config.json 读不出来、被应用覆盖前留下的那份（paths.save_config 写的）。
+# 它和 config.json 一样含私人路径，同样不能进仓库。
+config.json.bak
+config.json.tmp
+# 用户自己的 LoRA 备注（导入 LoRA 时自动生成）
+lora_aliases.json
+# 运行期数据
+_provenance.json
+__pycache__/
+*.pyc
+.ruff_cache/
+# 用户自己加的拼装项
+custom_prompt_options.json
+# 测试跑起来会在 tests/ 下留中间文件（_caps.json / _*.js 之类）。
+# 它们不进发布包，但你本地跑过测试之后 git status 会一直是脏的 —— 挡掉。
+tests/_*
+# 别把模型和产出推上来
+*.safetensors
+*.ckpt
+*.pth

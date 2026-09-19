@@ -1,0 +1,3029 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snakeer Drawing</title>
+<style>
+  :root{
+    /* 三级底色：页面(bg) < 卡片(panel) < 面板(panel2)；输入框/舞台再压暗一档。
+       边框单独给一档 --line，亮度按 WCAG 相对亮度算过：
+         --line 画在 --panel 上 = 2.44:1（改之前 #333a48 画在 #1c1f26 上是 1.44:1，
+         几乎看不见边框，这就是"底色和边框一样"的原因）。
+       再改配色时请改 _pick_colors.py 里的候选值重算，别凭眼睛调。 */
+    --bg:#07090d; --panel:#1b2130; --panel2:#262e40; --panel3:#151a26;
+    --input:#0a0c11; --stage:#05070a;
+    --line:#4e5d7d;
+    --txt:#eaeef6; --dim:#9aa6bd; --dim2:#7e8a9f;
+    --accent:#5b95ff; --accent2:#3d78e8;
+    --ok:#43d99a; --warn:#e8ad46; --err:#e86a6a;
+    /* 立体感用的三档：卡片顶部一道极淡的高光、卡片外一层浅影、浮层一层深影。
+       深色界面里纯描边会显得"平"，加这两笔就有层次了。 */
+    --edge:rgba(255,255,255,.045);
+    --shadow:0 1px 3px rgba(0,0,0,.45);
+    --shadow-lg:0 18px 50px rgba(0,0,0,.62);
+    --ring:rgba(91,149,255,.18);
+  }
+  *{box-sizing:border-box}
+  /* 深色界面配系统默认滚动条会跳出一条亮白条，很扎眼 */
+  html{scrollbar-color:#3c4761 transparent;scrollbar-width:thin}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#3c4761;border-radius:7px;
+                            border:3px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:#4e5d7d}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.55 "Microsoft YaHei","Segoe UI",system-ui,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:12px 18px;
+         background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+  .caps{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .pill{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+        background:var(--panel2);color:var(--dim);white-space:nowrap}
+  .pill.on{color:var(--ok);border-color:#2f6b52}
+  .pill.off{color:var(--warn);border-color:#6b5729}
+  /* 配置有问题：比 off（功能缺模型）更严重 —— 整个 config.json 都没被读进来。
+     用 --err 而不是 --warn，好和"缺个模型"区分开。 */
+  .pill.err{color:var(--err);border-color:#6b3a3a}
+  /* 三栏：左提示词 / 中出图 / 右参数。
+     用 grid-template-areas 而不是列宽 —— 窄屏时要能把「参数」整栏挪到左栏下面，
+     靠改列宽做不到这件事。
+     窄屏退回两栏（中栏跨两行，参数掉到左栏下方），再窄就单栏。
+     参考 MooshieUI 的分栏比例：两侧窄、中间给大图。 */
+  .wrap{display:grid;gap:14px;padding:14px;align-items:start;
+        grid-template-columns:minmax(330px,1fr) minmax(430px,1.75fr) minmax(330px,1fr);
+        grid-template-areas:"left mid right"}
+  .col-left{grid-area:left}
+  .col-mid{grid-area:mid}
+  .col-right{grid-area:right}
+  @media (max-width:1240px){
+    .wrap{grid-template-columns:minmax(320px,1fr) minmax(400px,1.4fr);
+          grid-template-areas:"left mid" "right mid"}
+  }
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr;grid-template-areas:"left" "mid" "right"}
+  }
+  .col{display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        overflow:hidden;box-shadow:var(--shadow), inset 0 1px 0 var(--edge)}
+  /* 卡片标题：左边一道强调色小竖条 + 从上到下微微变暗的底，
+     比原来一整块死板的 panel2 有层次，也让每张卡一眼分得开 */
+  .card>h2{margin:0;padding:10px 14px;font-size:13px;font-weight:600;
+           background:linear-gradient(180deg,var(--panel2),var(--panel));
+           border-bottom:1px solid var(--line);
+           display:flex;align-items:center;gap:9px;cursor:default}
+  .card>h2:before{content:"";width:3px;height:14px;border-radius:2px;
+                  background:var(--accent);flex:none}
+  .card>h2 .tag{font-size:11px;font-weight:400;color:var(--dim);margin-left:auto}
+  .card .body{padding:12px 14px}
+  .tabs{display:flex;gap:6px;padding:12px 14px 0}
+  .tab{flex:1;padding:9px;text-align:center;border-radius:9px 9px 0 0;cursor:pointer;
+       background:var(--panel2);border:1px solid var(--line);border-bottom:none;color:var(--dim)}
+  .tab.active{background:var(--panel);color:var(--txt);border-color:var(--accent)}
+  textarea,input[type=text]{width:100%;background:var(--input);color:var(--txt);
+    border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;resize:vertical;
+    transition:border-color .12s, box-shadow .12s}
+  textarea:focus,input:focus{outline:none;border-color:var(--accent);
+                             box-shadow:0 0 0 3px var(--ring)}
+  .trans{margin-top:8px;padding:9px 11px;background:var(--input);border:1px dashed var(--line);
+         border-radius:9px;color:var(--dim);font-size:12.5px;min-height:34px;word-break:break-word}
+  .trans b{color:var(--ok);font-weight:500}
+  .trans .unk{color:var(--warn)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:9px}
+  .field label{font-size:12px;color:var(--dim)}
+  .row{display:flex;gap:9px;align-items:center}
+  select{width:100%;background:var(--input);color:var(--txt);border:1px solid var(--line);
+         border-radius:9px;padding:7px 9px;font:inherit;transition:border-color .12s, box-shadow .12s}
+  select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .val{font-size:12px;color:var(--accent);min-width:44px;text-align:right}
+  button{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 16px;
+         font:inherit;font-weight:600;cursor:pointer;
+         box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 1px 2px rgba(0,0,0,.35)}
+  button:hover{background:var(--accent2)}
+  button:disabled{background:#3a4356;color:#8794a8;cursor:not-allowed;box-shadow:none}
+  button.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+               font-weight:400;box-shadow:inset 0 1px 0 var(--edge)}
+  button.ghost:hover{background:#313b52}
+  .gen{display:flex;gap:10px;align-items:center;padding:0 14px 14px}
+  .status{font-size:12.5px;color:var(--dim);margin-left:auto;text-align:right;
+          /* 报错消息最长会到 60 字上下（"连不上 ComfyUI（地址）…"）。
+             min-width:0 让这个 flex 项在放不下时**换行**，而不是把生成按钮挤变形 ——
+             flex 项默认 min-width:auto，长文本撑住不肯缩。 */
+          min-width:0}
+  .status.err{color:var(--err)}
+  .status.ok{color:var(--ok)}
+  canvas{width:100%;background:#fff;border-radius:8px;cursor:crosshair;touch-action:none;
+         border:1px solid var(--line)}
+  .drop{border:1.5px dashed var(--line);border-radius:8px;padding:18px 10px;text-align:center;
+        color:var(--dim);font-size:12.5px;cursor:pointer;background:var(--input)}
+  .drop:hover,.drop.over{border-color:var(--accent);color:var(--txt)}
+  .clearbtn{position:absolute;top:6px;right:6px;width:22px;height:22px;line-height:1;
+            padding:0;border-radius:50%;background:#2b3242;border:1px solid var(--line);
+            color:var(--dim);font-size:13px;cursor:pointer}
+  .clearbtn:hover{background:#40212a;color:#ff8a8a;border-color:#6b2f2f}
+  .imgwrap{position:relative;display:inline-block;margin-top:8px}
+  .imgwrap img{max-width:100%;border-radius:8px;display:block}
+  /* previews are capped so a large photo cannot blow up the layout */
+  #previewSource{max-height:190px;width:auto;max-width:100%;object-fit:contain;
+                 border:1px solid var(--line);background:var(--input)}
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;padding:12px 14px}
+  .thumbs img{width:100%;border-radius:9px;border:1px solid var(--line);display:block}
+  details{border-top:1px solid var(--line)}
+  details>summary{padding:9px 14px;cursor:pointer;font-size:12.5px;color:var(--dim);
+                  list-style:none;display:flex;align-items:center;gap:7px;
+                  transition:background-color .12s, color .12s}
+  /* 折叠标题悬停给一点反馈：原来鼠标划过去毫无变化，看不出能不能点 */
+  details>summary:hover{background:rgba(255,255,255,.04);color:var(--txt)}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary:before{content:"▸";transition:transform .15s;color:var(--accent)}
+  details[open]>summary:before{transform:rotate(90deg)}
+  details .body{padding:0 14px 12px}
+  .hint{font-size:11.5px;color:var(--dim);line-height:1.5}
+  .disabled{opacity:.45;pointer-events:none}
+  /* 参数说明小字：每个可调参数下面一行，说明调高/调低的效果 */
+  .phint{font-size:11.5px;color:var(--dim2);line-height:1.5;margin:-3px 0 9px;
+         padding-left:2px}
+  .sep{height:1px;background:var(--line);margin:12px 0 10px}
+  /* 质量词勾选 */
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}
+  .chip{border:1px solid var(--line);background:var(--panel2);border-radius:14px;
+        padding:4px 11px;font-size:12px;cursor:pointer;user-select:none;
+        color:var(--dim)}
+  .chip.on{border-color:var(--ok);color:var(--ok);background:rgba(67,217,154,.14)}
+  /* 蒙版编辑器 */
+  .modal{display:none;position:fixed;inset:0;background:#000a;z-index:50;
+         padding:22px;overflow:auto}
+  .modal.on{display:flex;align-items:stretch;justify-content:center}
+  .modalBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+            max-width:1180px;width:100%;box-shadow:var(--shadow-lg), inset 0 1px 0 var(--edge)}
+  .modalHead{display:flex;align-items:center;gap:8px;padding:10px 13px;
+             border-bottom:1px solid var(--line);flex:none;
+             background:linear-gradient(180deg,var(--panel2),var(--panel))}
+  .modalBody{display:flex;gap:10px;padding:8px;flex-wrap:nowrap;flex:1;min-height:0}
+  .maskStage{flex:1;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--stage);border-radius:8px;border:1px solid var(--line);padding:6px;overflow:hidden}
+  #maskCanvas{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:crosshair;border-radius:4px;touch-action:none;display:block}
+  .maskSide{width:290px;flex:none;overflow-y:auto;max-height:100%;padding-right:2px}
+  @media (max-width:900px){ .maskSide{width:100%} }
+  /* 站内看图：左右两张导航按钮贴在图片两侧，图片限高不撑破窗口 */
+  /* ★ 浮层必须限高并换成纵向 flex，否则竖图会把 modalBox 撑到视口外，
+       图片和导航按钮下半截直接看不到（实测 1500×950 的窗口里就这样）。 */
+  #viewModal .modalBox{max-height:calc(100vh - 44px);display:flex;flex-direction:column}
+  .viewStage{flex:1;min-width:0;min-height:0;display:flex;align-items:center;
+             justify-content:center;background:var(--stage);border-radius:8px;
+             border:1px solid var(--line);padding:6px;overflow:hidden}
+  #viewImg{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
+           border-radius:4px;display:block}
+  .vnav{flex:none;align-self:center;width:44px;height:88px;padding:0;font-size:26px;
+        line-height:1;background:var(--panel2);border:1px solid var(--line);
+        color:var(--txt);border-radius:8px}
+  .vnav:hover{background:#313b52}
+  .vnav:disabled{background:#3a4356;color:#8794a8;cursor:not-allowed}
+  /* 修图前后对比（canvas 绘制，避免双面板裁剪的兼容问题） */
+  .cmpStage{position:relative;width:100%;max-width:900px;margin:0 auto;
+            background:var(--stage);border:1px solid var(--line);border-radius:8px;
+            overflow:hidden;line-height:0}
+  #cmpCanvas{max-width:100%;display:block}
+  .cmpSlider{position:absolute;left:0;right:0;bottom:10px;width:calc(100% - 24px);
+             margin:0 12px;cursor:ew-resize;z-index:3}
+  /* LoRA 分组面板 */
+  .loraGroup{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;overflow:hidden}
+  .loraGroup>summary{padding:8px 11px;cursor:pointer;font-size:12.5px;color:var(--txt);
+        background:var(--panel2);list-style:none;display:flex;align-items:center;gap:7px}
+  .loraGroup>summary::-webkit-details-marker{display:none}
+  .loraGroup>summary:before{content:"▸";color:var(--dim);transition:transform .15s}
+  .loraGroup[open]>summary:before{transform:rotate(90deg)}
+  .loraGroup .gcount{color:var(--dim);font-size:11.5px;margin-left:auto}
+  .loraGroup .gbody{padding:9px 11px}
+  /* 二级菜单（C站分类） */
+  .loraSub{border:1px solid var(--line);border-radius:6px;margin-bottom:6px;
+           background:var(--panel3);overflow:hidden}
+  .loraSub>summary{padding:6px 10px;cursor:pointer;font-size:12px;color:var(--dim);
+        list-style:none;display:flex;align-items:center;gap:6px}
+  .loraSub>summary::-webkit-details-marker{display:none}
+  .loraSub>summary:before{content:"▸";transition:transform .15s}
+  .loraSub[open]>summary:before{transform:rotate(90deg)}
+  .loraSub .gbody{padding:8px 10px}
+  .loraSub .addLora{font-size:11.5px;padding:4px 9px}
+  .loraRow{display:flex;gap:7px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
+  .loraRow select{flex:2;min-width:120px}
+  .loraRow input[type=range]{flex:1;min-width:66px}
+  .loraRow .trig{flex-basis:100%;margin:0 0 4px 0;font-size:12.5px;line-height:1.65}
+  /* note 是 textContent 塞进来的纯文本，没有这条规则的话里面的换行会被
+     HTML 折叠成空格 —— 之前写在别名表里的多行说明全挤成一整坨，
+     这才是「note 内容杂乱、抓不到重点」的真正原因。 */
+  .loraRow .trig>.note{white-space:pre-line;margin-bottom:4px;color:var(--dim)}
+  .addLora{padding:5px 11px;font-size:12px;width:100%}
+  .swatch{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--dim)}
+  input[type=color]{width:30px;height:24px;padding:0;border:1px solid var(--line);
+                    border-radius:5px;background:none}
+
+  @keyframes pbPress{
+    0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(62,207,142,.65); }
+    40%  { transform: scale(.93);  box-shadow: 0 0 0 6px rgba(62,207,142,.22); }
+    100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(62,207,142,0); }
+  }
+  .pbFlash{
+    animation: pbPress .38s ease-out;
+    border-color: var(--ok) !important;
+    color: var(--ok) !important;
+  }
+
+  /* 最近产出：按日期折叠。每天一个 details，避免一次铺满整屏 */
+  .dayGroup{margin:0 0 8px;border:1px solid var(--line);border-radius:8px;
+            background:var(--panel2);overflow:hidden}
+  .dayGroup>summary{padding:7px 11px;cursor:pointer;font-size:12.5px;
+                    display:flex;gap:8px;align-items:center;color:var(--txt)}
+  .dayGroup>summary::marker{color:var(--dim)}
+  .dayGroup .dcount{margin-left:auto;color:var(--dim);font-size:11.5px}
+  .dayGroup .thumbs{padding:8px;gap:8px}
+  /* 每格：图片在上，操作行在下 —— 用常规流排版，不用绝对定位，
+     这样任何宽度下按钮和大小标签都不会叠在一起 */
+  .shot{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .shot .pic{position:relative;line-height:0}
+  .shot img{width:100%;border-radius:8px;border:1px solid var(--line);
+            display:block;cursor:zoom-in;aspect-ratio:1/1;object-fit:cover}
+  /* 时间与大小浮在图片右上角：底部那一行只放按钮，
+     这样无论两个还是三个按钮，行高都一致，不会把标签挤到第二行 */
+  .shot .meta{position:absolute;top:4px;right:4px;background:#000a;
+              color:var(--txt);font-size:10px;line-height:1.5;padding:1px 5px;
+              border-radius:4px;white-space:nowrap;pointer-events:none}
+  .shot .row{display:flex;gap:5px;align-items:center}
+  .shot .row button{padding:2px 7px;font-size:11px;flex:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Snakeer Drawing</h1>
+  <!-- 构建戳：服务端发这个文件时会把下面的占位符换成 ui.html / server.py 的最后
+       修改时间。作用只有一个 —— 一眼分辨"我看到的到底是不是最新界面"。
+       没被替换（例如直接双击本地文件打开）就会原样显示成占位符本身，
+       那正好说明这份页面不是服务端发的。 -->
+  <span class="pill" id="buildTag" title="ui.html / server.py 的最后修改时间"><!--BUILD--></span>
+  <div class="caps" id="caps"><span class="pill">检测中…</span></div>
+</header>
+
+<div class="wrap">
+  <!-- ============ 左栏：提示词（写什么） ============ -->
+  <div class="col col-left">
+
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" data-mode="txt2img">文生图</div>
+        <div class="tab" data-mode="img2img">图生图</div>
+      </div>
+      <div class="body">
+        <div class="field">
+          <label>正向提示词（中文，逗号或空格分隔）</label>
+          <textarea id="promptCN" rows="3"></textarea>
+        </div>
+        <div class="trans" id="transOut">翻译结果会显示在这里</div>
+
+        <div class="field" id="sourceWrap" style="margin-top:14px;display:none">
+          <label>源图（图生图用，拖入或点击选择）</label>
+          <div class="drop" id="dropSource">点击选择图片，或把图片拖到这里</div>
+          <div class="imgwrap" id="wrapSource" style="display:none">
+            <img id="previewSource">
+            <button class="clearbtn" title="清除源图" onclick="clearSource()">×</button>
+          </div>
+        </div>
+      </div>
+
+      <details id="negBox">
+        <summary>负向提示词</summary>
+        <div class="body">
+          <div class="phint" style="margin:0 0 6px">
+            预设已经带了一套够用的负向词，<b>这里一般留空</b>。填了会追加在所选预设后面
+          </div>
+          <textarea id="negative" rows="2"></textarea>
+          <button class="ghost" style="margin-top:8px" id="negResetBtn">清空自定义负向词</button>
+        </div>
+      </details>
+
+      <details id="metaBox">
+        <summary>从成品图读回参数（反推提示词）</summary>
+        <div class="body">
+          <div class="phint" style="margin:0 0 6px">
+            ComfyUI 出图时会把整份参数写进 PNG 里，所以这一栏是
+            <b>原样读回、不是猜</b>。丢一张本机出的图进来，提示词和采样参数
+            直接就能用 —— 想换人物、换背景时不用重新描述一遍。
+          </div>
+          <div class="drop" id="dropMeta">点击选择成品图，或把图拖到这里</div>
+          <div class="phint" id="metaMsg" style="margin:6px 0 0"></div>
+          <div id="metaOut" style="display:none;margin-top:10px"></div>
+        </div>
+      </details>
+
+      <details id="pbBox">
+        <summary>提示词拼装</summary>
+        <div class="body">
+          <!-- ★ 这个 div 必须留着：JS 会往里写"加载失败"提示和按钮闪烁提示
+               （见 $("pbHint") 的几处引用）。这里只是清掉了初始那段说明。 -->
+          <div class="phint" id="pbHint"></div>
+          <div id="pbGroups"></div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+            <div class="phint" style="margin-bottom:6px">
+              <b>加自定义项</b>。英文标签建议填 Danbooru 真实标签
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <select id="pbNewGroup" style="flex:0 0 150px"></select>
+              <input id="pbNewCn" placeholder="中文名" style="flex:1 1 110px;min-width:90px">
+              <input id="pbNewEn" placeholder="英文标签" style="flex:2 1 180px;min-width:120px">
+              <button class="ghost" id="pbAddBtn">添加</button>
+            </div>
+            <div class="phint" id="pbAddMsg" style="margin-top:4px"></div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="ghost" id="pbFill">填入提示词框</button>
+            <button class="ghost" id="pbRandom">随机一组</button>
+            <button class="ghost" id="pbRandomPE">随机姿势+表情</button>
+            <button class="ghost" id="pbClear">清空选择</button>
+            <span class="phint" id="pbCount" style="margin:0"></span>
+          </div>
+          <div class="phint" id="pbPreview" style="margin-top:6px;word-break:break-all"></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- 引导输入 -->
+    <div class="card">
+      <h2>引导输入</h2>
+      <details id="sketchBox">
+        <summary>草图构图</summary>
+        <div class="body">
+            <div class="row" style="margin-bottom:8px">
+              <input type="checkbox" id="useSketch">
+              <label for="useSketch" style="font-size:13px;color:var(--txt)">
+                启用草图
+              </label>
+            </div>
+            <!-- ★ canvas 的 width/height 属性是 512×512（画布分辨率，导出就用这个），
+                 但 CSS 里 canvas{width:100%} 会把它拉成"卡片多宽就多宽"：
+                 以前在半栏里显示成 ~210×512，横竖比被压扁；现在整栏更宽，不加
+                 aspect-ratio 就会变成 ~800×512 的一条扁带，还把卡片撑得老高。
+                 aspect-ratio 保证显示成正方形，max-width 防止它吃掉一屏。 -->
+            <div class="row" style="align-items:flex-start;gap:16px;flex-wrap:wrap">
+              <div style="flex:0 0 auto">
+                <canvas id="pad" width="512" height="512"
+                        style="aspect-ratio:1/1;height:auto;max-width:340px"></canvas>
+                <div class="row" style="margin-top:7px;flex-wrap:wrap;gap:6px">
+                  <button class="ghost" onclick="clearPad()" style="padding:5px 10px;font-size:12px">清空</button>
+                  <button class="ghost" onclick="downloadPad()" style="padding:5px 10px;font-size:12px">下载</button>
+                  <button class="ghost" onclick="document.getElementById('padFile').click()" style="padding:5px 10px;font-size:12px">上传</button>
+                  <input type="file" id="padFile" accept="image/*" style="display:none">
+                  <span class="swatch"><input type="color" id="penColor" value="#222222">笔色</span>
+                </div>
+              </div>
+              <!-- 画板只占左侧一块，剩下的横向空间给设置项 —— 否则卡片右边空一大片 -->
+              <div style="flex:1;min-width:230px">
+                <div class="field" style="margin-bottom:9px">
+                  <label>草图类型</label>
+                  <select id="controlnet"></select>
+                  <div class="hint" id="cnHint" style="margin-top:4px"></div>
+                </div>
+                <div class="field">
+                  <div class="row"><label>引导强度</label><span class="val" id="skVal">0.80</span></div>
+                  <input type="range" id="sketchStrength" min="0" max="1.5" step="0.05" value="0.8">
+                </div>
+              </div>
+            </div>
+        </div>
+      </details>
+
+      <details id="refBox" open>
+        <summary>参考图</summary>
+        <div class="body">
+            <div class="row" style="margin-bottom:8px">
+              <input type="checkbox" id="useRef">
+              <label for="useRef" style="font-size:13px;color:var(--txt)">
+                启用参考图
+              </label>
+            </div>
+              <div class="drop" id="dropRef">
+                <span id="dropRefHint">点击选择参考图，或拖到这里</span></div>
+            <div id="wrapRef" style="display:none;margin-top:8px">
+              <div class="row" style="justify-content:space-between;margin-bottom:5px">
+                <span class="hint" id="refCount"></span>
+                <button class="ghost" style="padding:3px 9px;font-size:12px"
+                        onclick="clearRef()">全部清除</button>
+              </div>
+              <div id="refThumbs" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+            </div>
+            <div class="field" style="margin-top:8px">
+              <div class="row"><label>参考强度</label><span class="val" id="rfVal">0.80</span></div>
+              <input type="range" id="refStrength" min="0" max="1.5" step="0.05" value="0.8">
+            </div>
+            <div class="field" style="margin-top:8px">
+              <label>参考方式</label>
+              <select id="refWeightType">
+                <option value="linear">标准（整体参考）</option>
+                <option value="style transfer">画风迁移</option>
+                <option value="strong style transfer">强画风迁移</option>
+                <option value="composition">粗构图倾向（不精确）</option>
+                <option value="style and composition">画风+粗构图</option>
+              </select>
+            </div>
+            <div class="field" style="margin-top:8px">
+              <label>多张参考图的合并方式</label>
+              <select id="refCombine">
+                <option value="concat">拼接（各自独立，效果最直观）</option>
+                <option value="average">平均（取共同特征）</option>
+                <option value="add">相加（叠加增强）</option>
+                <option value="norm average">归一化平均</option>
+              </select>
+            </div>
+        </div>
+      </details>
+
+      <!-- 构图迁移（深度图）。跟上面「参考图 / IP-Adapter」是两回事：
+           那条只给整体观感，这条是真按像素摆位置。 -->
+      <details id="depthBox" open>
+        <summary>构图迁移</summary>
+        <div class="body">
+            <div class="row" style="margin-bottom:8px">
+              <input type="checkbox" id="useDepth">
+              <label for="useDepth" style="font-size:13px;color:var(--txt)">
+                启用
+              </label>
+            </div>
+            <div class="hint">
+              上传一张成品图 → 点「解析构图」→ 转成深度图（<b>白=近、黑=远</b>）。
+            </div>
+            <div class="row" style="gap:8px;margin-top:8px">
+              <button class="ghost" style="padding:4px 12px" onclick="$('depthFile').click()">选择图片</button>
+              <button class="ghost" style="padding:4px 12px" onclick="analyzeDepth()">解析构图</button>
+              <button class="ghost" style="padding:4px 12px" onclick="clearDepth()">清除</button>
+              <span class="hint" id="depthName"></span>
+            </div>
+            <input type="file" id="depthFile" accept="image/*" style="display:none">
+            <!-- ★ 内联样式里只能有一个 display。原来写成
+                 "display:none;...;display:flex"，CSS 取最后一个，
+                 结果这块永远显示 —— 解析前就露出一个破图 + 滑块。
+                 flex 由 analyzeDepth() 在解析成功后用 JS 设。 -->
+            <div id="depthWrap" style="display:none;margin-top:10px;gap:14px;align-items:flex-start">
+              <!-- 原图 → 深度图 并排。原图在选完文件就能看到（不然容易忘了放过哪张），
+                   深度图要解析成功才出现。 -->
+              <div style="display:flex;gap:10px;align-items:flex-start;flex-shrink:0">
+                <div style="text-align:center">
+                  <img id="depthSrcThumb" alt="原图"
+                       style="width:110px;border-radius:6px;border:1px solid var(--line);display:block">
+                  <div class="hint" style="margin-top:3px">原图</div>
+                </div>
+                <div class="hint" style="align-self:center;font-size:16px">→</div>
+                <div style="text-align:center" id="depthOutBox">
+                  <img id="depthPreview" alt="深度图"
+                       style="width:110px;border-radius:6px;border:1px solid var(--line);display:block">
+                  <div class="hint" style="margin-top:3px">深度图</div>
+                </div>
+              </div>
+              <div style="flex:1">
+                <div class="field">
+                  <div class="row"><label>构图约束强度</label><span class="val" id="dpVal">0.70</span></div>
+                  <input type="range" id="depthStrength" min="0" max="1.5" step="0.05" value="0.7">
+                </div>
+              </div>
+            </div>
+          </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ============ 右栏：参数（怎么生成） ============ -->
+  <div class="col col-right">
+    <!-- 参数 -->
+    <div class="card">
+      <h2>参数</h2>
+      <details>
+        <summary>展开参数调节</summary>
+        <div class="body">
+          <div class="field"><label>底模</label>
+            <select id="checkpoint"></select></div>
+          <div class="field"><label>画面比例</label>
+            <select id="sizePreset"></select></div>
+          <div class="grid2" id="sizeCustom" style="display:none">
+            <div class="field"><label>分辨率 宽</label>
+              <select id="width"></select></div>
+            <div class="field"><label>分辨率 高</label>
+              <select id="height"></select></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>生成张数</label>
+              <select id="count"><option>1</option><option>2</option><option>4</option></select></div>
+            <div class="field"><label>种子（留空=随机）</label>
+              <input type="text" id="seed" placeholder="随机"></div>
+          </div>
+          <div class="field"><label>步数 <span class="val" id="stVal">30</span></label>
+            <input type="range" id="steps" min="10" max="50" step="1" value="30"></div>
+          <div class="phint">调高＝细节更精细、更慢。调低＝出图快但粗糙。默认 30</div>
+          <div class="field"><label>CFG <span class="val" id="cfgVal">5.5</span></label>
+            <input type="range" id="cfg" min="1" max="14" step="0.5" value="5.5"></div>
+          <div class="phint">调高＝更听提示词，但画面易过饱和、发灰。调低＝更自由但可能忽略你的描述。默认 5.5</div>
+          <div class="field" id="denoiseWrap" style="display:none">
+            <label>重绘幅度 <span class="val" id="dnVal">0.55</span></label>
+            <input type="range" id="denoise" min="0.1" max="1" step="0.05" value="0.55"></div>
+          <div class="phint" id="dnHint">【仅图生图】调低＝更像原图（保留原样）。调高＝改动越大（可能修好也可能变样）。0.4–0.7 常用</div>
+          <div class="field"><label>Clip skip <span class="val" id="csVal">2</span></label>
+            <input type="range" id="clipSkip" min="0" max="4" step="1" value="2"></div>
+          <div class="grid2">
+            <div class="field"><label>采样器</label><select id="sampler"></select></div>
+            <div class="field"><label>调度器</label><select id="scheduler"></select></div>
+          </div>
+
+          <div class="sep"></div>
+          <div class="field"><label>出图质量（正向词的头部，可多选）</label></div>
+          <div id="qualityChips" class="chips"></div>
+
+          <div class="sep"></div>
+          <div class="field"><label>负向词排除强度</label>
+            <select id="negPreset">
+              <option value="univ" selected>通用（推荐）</option>
+              <option value="full">标准 —— 排除崩坏、水印</option>
+              <option value="strong">加强 —— 再排除发灰、低对比</option>
+              <option value="minimal">极简 —— 只排除最基础的问题</option>
+              <option value="none">不使用 —— 完全不加负向词</option>
+            </select></div>
+        </div>
+      </details>
+      <details open>
+        <summary>LoRA（可叠加多个）</summary>
+        <div class="body">
+          <div class="hint" style="margin-bottom:8px">
+            按类型分组管理。每个类型下可放多个 LoRA，用「＋」添加到该类型。
+          </div>
+          <div id="loraGroups"></div>
+          <div class="hint" style="margin-top:10px">
+            角色 LoRA 权重建议 0.7–0.9；多个叠加时各降到 0.4–0.6，最多 3 个。
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ============ 中栏：出图（生成了什么） ============ -->
+  <div class="col col-mid">
+    <div class="card">
+      <h2>生成结果</h2>
+      <div class="gen">
+        <button id="btnGen">生成</button>
+        <button class="ghost" id="btnFolder">打开文件夹</button>
+        <div class="status" id="status">就绪</div>
+      </div>
+      <div class="thumbs" id="thumbs"><span class="hint" style="grid-column:1/-1">还没有结果</span></div>
+    </div>
+    <div class="card">
+      <h2>最近产出</h2>
+      <div class="body" style="padding-bottom:6px">
+        <div class="row" style="margin-bottom:8px;flex-wrap:wrap">
+          <button class="ghost" style="padding:5px 10px;font-size:12px"
+                  onclick="loadRecent()">刷新列表</button>
+          <span class="hint">放大倍数</span>
+          <select id="upFactor" style="width:auto;padding:4px 8px;font-size:12px">
+            <option value="1.5">1.5×</option>
+            <option value="2" selected>2×（推荐）</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+          </select>
+          <div class="status" id="upStatus"></div>
+        </div>
+      </div>
+      <div class="thumbs" id="recent"><span class="hint" style="grid-column:1/-1">点「刷新列表」加载</span></div>
+    </div>
+    <div class="card">
+      <h2>本次使用的英文提示词</h2>
+      <div class="body"><div class="trans" id="lastEnglish">—</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 站内看图（左右切换） =================
+     以前点缩略图是 window.open 另开浏览器标签页：一来看完要手动关，
+     二来根本没法在图上按左右键翻下一张。这里做成站内浮层，
+     ← → 翻页、Esc 关闭、点背景关闭，和系统看图工具一个手感。 -->
+<div id="viewModal" class="modal">
+  <div class="modalBox">
+    <div class="modalHead">
+      <b id="viewName">看图</b>
+      <span class="hint" id="viewIdx" style="margin-left:8px"></span>
+      <span class="hint" style="margin-left:auto">← → 翻页　Esc 关闭</span>
+      <button class="ghost" id="viewCmp" style="display:none">前后对比</button>
+      <button class="ghost" id="viewUp">放大</button>
+      <button class="ghost" id="viewFix">修图</button>
+      <button class="ghost" id="viewRaw">原图</button>
+      <button class="ghost" id="viewDel" title="移入回收站（不是真删）">删除</button>
+      <button class="ghost" id="viewClose">关闭</button>
+    </div>
+    <div class="modalBody" style="padding:8px">
+      <button class="vnav" id="viewPrev" title="上一张（←）">‹</button>
+      <div class="viewStage">
+        <img id="viewImg" alt="">
+      </div>
+      <button class="vnav" id="viewNext" title="下一张（→）">›</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 修图前后对比 ================= -->
+<div id="cmpModal" class="modal">
+  <div class="modalBox">
+    <div class="modalHead">
+      <b>修图前后对比</b>
+      <span class="hint" style="margin-left:8px" id="cmpHint">拖动中间滑杆看差异</span>
+      <button class="ghost" id="cmpFlip" style="margin-left:auto">切换左右</button>
+      <button class="ghost" id="cmpClose">关闭</button>
+    </div>
+    <div class="modalBody" style="flex-direction:column">
+      <div class="cmpStage">
+        <canvas id="cmpCanvas"></canvas>
+        <input type="range" id="cmpSlider" min="0" max="100" value="50" class="cmpSlider">
+      </div>
+      <div class="hint" id="cmpInfo" style="margin-top:10px"></div>
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="ghost" id="cmpFull">整张图</button>
+        <button class="ghost" id="cmpDiff">高亮差异</button>
+        <button class="ghost" id="cmpOneToTwo">并排两图</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 蒙版编辑器 ================= -->
+<div id="maskModal" class="modal">
+  <div class="modalBox">
+    <div class="modalHead">
+      <b>涂抹要重画的区域</b>
+      <button class="ghost" id="maskClose" style="margin-left:auto">关闭</button>
+    </div>
+    <div class="modalBody">
+      <div class="maskStage">
+        <canvas id="maskCanvas"></canvas>
+      </div>
+      <div class="maskSide">
+          <div class="field" style="margin-bottom:6px">
+            <label style="display:flex;align-items:center;gap:6px">
+              视图 <span class="val" id="maskZoomVal">100%</span>
+            </label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <button class="ghost" id="maskZoomOut" style="flex:1;padding:3px 0">缩小</button>
+              <button class="ghost" id="maskZoomFit" style="flex:1;padding:3px 0">适应</button>
+              <button class="ghost" id="maskZoomIn" style="flex:1;padding:3px 0">放大</button>
+              <button class="ghost" id="maskZoom100" style="flex:1;padding:3px 0">100%</button>
+            </div>
+          </div>
+        <div class="field"><label>笔刷大小 <span class="val" id="brushVal">48</span>px</label>
+          <input type="range" id="brushSize" min="8" max="220" step="4" value="48"></div>
+
+        <div class="field"><label>改动幅度 <span class="val" id="inpVal">0.75</span></label>
+          <input type="range" id="inpDenoise" min="0.2" max="1" step="0.05" value="0.75"></div>
+        <div class="phint">调低＝只做小修补。调高＝改动更彻底。0.6–0.85 常用</div>
+
+        <div class="field"><label>向外扩张 <span class="val" id="inpGrowVal">12</span>px</label>
+          <input type="range" id="inpGrow" min="0" max="48" step="2" value="12"></div>
+        <div class="phint">★ 最重要的一个参数。调高＝连带周围一起重画，接缝自然；<b>调到 0 会出现明显硬边</b>。修脸/修手建议 12–20</div>
+
+        <div class="field"><label>边缘融合 <span class="val" id="inpFeatherVal">12</span>px</label>
+          <input type="range" id="inpFeather" min="0" max="48" step="2" value="12"></div>
+
+        <div class="field" style="margin-top:10px"><label>重画时使用的提示词</label>
+          <textarea id="inpPrompt" rows="3" placeholder="留空＝沿用左边主界面的提示词"></textarea></div>
+
+        <div class="field"><label>专用 Inpainting 模型（推荐开启）</label>
+          <select id="inpControlNet"></select></div>
+        <div class="field"><label>模型影响强度 <span class="val" id="cnVal">0.8</span></label>
+          <input type="range" id="inpCnStrength" min="0" max="1.5" step="0.05" value="0.8"></div>
+        <div class="phint">调高＝更严格保持原图结构。调低＝让模型更自由重画。<b>0.7–0.9 推荐</b>；调 0 等于关闭</div>
+
+        <div class="field"><label>融合方式</label>
+          <select id="inpBlend">
+            <option value="alpha">直接贴回（推荐）—— 保留原色，实测最保真</option>
+            <option value="poisson">Poisson 融合 —— 仅当重绘区有明显色偏时才试</option>
+          </select></div>
+
+        <div class="row" style="gap:6px;margin-top:10px">
+          <button class="ghost" id="maskClear" style="flex:1">清空涂抹</button>
+          <button class="ghost" id="maskUndo" style="flex:1">撤销一笔</button>
+        </div>
+        <button id="maskRun" style="width:100%;margin-top:10px">重画涂抹区域</button>
+        <div class="status" id="maskStatus" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+// 在 canvas 上画图拿不到 CSS 变量（ctx.strokeStyle 只认具体颜色字符串），
+// 这里现读一次算好的值 —— 免得把 --ok 的色值再抄一遍，改配色时两处不同步。
+const cssv = n => getComputedStyle(document.documentElement)
+                    .getPropertyValue(n).trim();
+let caps = null;
+let mode = "txt2img";
+let sourceImage = null;
+let refImages = [];                       // uploaded names, in order
+// 构图迁移（深度图）：depthSrc = 原参考图在 ComfyUI input 里的名字；
+// depthMap = 解析出来的深度图（同样在 input 里，出图时喂给 ControlNet）。
+let depthSrc = null;
+let depthMap = null;
+let depthSrcURL = null;   // 原图缩略图的 objectURL，换图/清除时要 revoke
+let refThumbs = [];                       // {name, url} for preview
+let sourceObjectURL = null;
+let loraMeta = {};
+
+// ---------- 初始化下拉 ----------
+function fillSelect(el, options, def){
+  el.innerHTML = "";
+  options.forEach(v => {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = v;
+    if (v == def) o.selected = true;
+    el.appendChild(o);
+  });
+}
+// Square sizes. SDXL was trained at 1024, so that is the "native" size; larger
+// canvases work but cost time. 2048 is verified working on this 8 GB card.
+// 这几个值是「自定义」模式下能手选的；预设本身见下面的 SIZE_PRESETS。
+const SIZES = [768, 832, 864, 896, 1024, 1152, 1344, 1360];
+
+// 画面比例预设：选一个就把宽高一起设好，不用自己去配比例。
+// 全都按"像素总数≈100万"挑的（SDXL 训练分辨率就是 1M 像素），
+// 偏离太多会画崩或出重复构图。896×1152 / 1152×896 是底模作者点名的档位。
+const SIZE_PRESETS = [
+  { v:"1024x1024", w:1024, h:1024, t:"正方形 1024×1024（1:1）—— 头像 / 半身 / 构图实验" },
+  { v:"896x1152",  w:896,  h:1152, t:"竖版 896×1152（7:9）—— 全身立绘，作者推荐" },
+  { v:"1152x896",  w:1152, h:896,  t:"横版 1152×896（9:7）—— 场景 / 双人，作者推荐" },
+  { v:"1344x768",  w:1344, h:768,  t:"宽幅 1344×768（约 16:9）—— 桌面壁纸 / 风景" },
+  { v:"768x1344",  w:768,  h:1344, t:"手机壁纸 768×1344（约 9:16）" },
+  { v:"custom",    w:0,    h:0,    t:"自定义 —— 手动选宽高" },
+];
+// 采样器/调度器只列最常用的几个并带中文说明。后端支持 45 个采样器，
+// 但绝大多数差异很小，全列出来反而难选 —— 少数几个覆盖了 95% 的场景。
+const SAMPLER_CURATED = [
+  { v:"dpmpp_2m",        t:"dpmpp_2m —— 作者推荐，细节强（默认）" },
+  { v:"euler",           t:"euler —— 本模型作者推荐，线条干净" },
+  { v:"euler_ancestral", t:"euler_ancestral —— 通用首选，画面自然" },
+  { v:"dpmpp_2m_sde",    t:"dpmpp_2m_sde —— 细节最强，偶尔出怪图" },
+  { v:"dpmpp_sde",       t:"dpmpp_sde —— 质感好，略慢" },
+  { v:"uni_pc",          t:"uni_pc —— 步数少也能稳定出图" },
+  { v:"res_multistep",   t:"res_multistep —— 快且质量好" },
+  { v:"ddim",            t:"ddim —— 最快，细节偏少" },
+  { v:"lms",             t:"lms —— 偏柔和平滑" },
+];
+// 调度器：karras 曾经在这里写了两遍（两条 v 都是 "karras"），
+// 选哪个都一样但列表里看着像两个不同选项 —— 已合并成一条。
+// fillCurated 是按 v === def 标 selected 的，重复的 v 还会让两条同时被标记选中。
+const SCHEDULER_CURATED = [
+  { v:"karras",      t:"karras —— 作者推荐搭配 dpmpp_2m，对比度更高（默认）" },
+  { v:"normal",      t:"normal —— 标准，最稳" },
+  { v:"sgm_uniform", t:"sgm_uniform —— 柔和均匀，适合皮肤多的画面" },
+  { v:"simple",      t:"simple —— 简单直接，稍快" },
+];
+
+function fillCurated(sel, list, def){
+  sel.innerHTML = "";
+  list.forEach(x => {
+    const o = document.createElement("option");
+    o.value = x.v; o.textContent = x.t;
+    if(x.v === def) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+fillSelect($("width"), SIZES, 1024);
+fillSelect($("height"), SIZES, 1024);
+
+// 画面比例预设：选中就把宽高一起设好；只有选「自定义」才露出宽高下拉。
+// 提交时读的仍是 #width / #height，所以下面的出图逻辑不用改。
+(function initSizePreset(){
+  const sel = $("sizePreset"), row = $("sizeCustom");
+  SIZE_PRESETS.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.v; o.textContent = p.t;
+    sel.appendChild(o);
+  });
+  function apply(){
+    const p = SIZE_PRESETS.find(x => x.v === sel.value) || SIZE_PRESETS[0];
+    if(p.v === "custom"){ row.style.display = ""; return; }
+    row.style.display = "none";
+    $("width").value = String(p.w);
+    $("height").value = String(p.h);
+  }
+  sel.value = "1024x1024";
+  sel.addEventListener("change", apply);
+  apply();
+})();
+fillCurated($("sampler"), SAMPLER_CURATED, "dpmpp_2m");
+fillCurated($("scheduler"), SCHEDULER_CURATED, "karras");
+
+// ---------- 出图质量词 ----------
+// Illustrious 系底模认识的质量词。用勾选代替手写，避免拼错或漏写。
+const QUALITY_TAGS = [
+  { tag:"masterpiece",      on:true,  note:"杰作级质量" },
+  { tag:"best quality",     on:true,  note:"最佳质量" },
+  { tag:"amazing quality",  on:false,  note:"惊艳质量" },
+  { tag:"absurdres",        on:false,  note:"超高分辨率" },
+  { tag:"very aesthetic",   on:false,  note:"高美感（社区惯用词）" },
+  { tag:"highres",          on:false, note:"高分辨率" },
+  { tag:"detailed",         on:false, note:"细节丰富" },
+  { tag:"official art",     on:false, note:"官方画风（更干净）" },
+  { tag:"anime screenshot", on:false, note:"动画截图感" },
+  { tag:"western comics (style)", on:false, note:"美漫风格" },
+  { tag:"1980s (style)",    on:false, note:"80 年代复古" },
+  { tag:"1990s (style)",    on:false, note:"90 年代复古" },
+  { tag:"chibi",            on:false, note:"Q 版小体型" },
+];
+
+function renderQualityChips(){
+  const box = $("qualityChips");
+  box.innerHTML = "";
+  QUALITY_TAGS.forEach(q => {
+    const c = document.createElement("span");
+    c.className = "chip" + (q.on ? " on" : "");
+    c.textContent = q.note;
+    c.title = q.tag;
+    c.onclick = () => { q.on = !q.on; renderQualityChips(); };
+    box.appendChild(c);
+  });
+}
+function selectedQuality(){
+  return QUALITY_TAGS.filter(q => q.on).map(q => q.tag);
+}
+renderQualityChips();
+
+// 负向词预设
+// 「避免画面出现文字」的那组词（追加在默认档末尾）：
+//   english text  英文文本(413k)   speech bubble 对话框(527k)
+//   artist name   作者名(627k)     web address   网址(70k)
+//   signature     签名(444k)       watermark     水印(246k)  ← 这两个本来就在
+//   translated    已翻译(653k)     hard-translated 硬嵌字幕(7.1k) ← 画面被嵌译文
+// 为什么不是社区通用的 text：Danbooru 官方 wiki 明写
+//   "Do not use this tag. The mere fact that text is visible is not tagged
+//    on Danbooru." —— post_count=0，本地 328k 词库里也没有它，
+//   对 booru 系模型等于空转。替代词取自 tag group:text，逐条核实过。
+// 为什么不用 mojibake text / gibberish text（乱码文本/乱码文字）：
+//   那两个才是字面意义上的「乱码」，但只有 104 / 92 帖，模型没有对应表征；
+//   而画面上的乱码本来就是 english text 渲染失败的产物，压住前者即可。
+const NEG_PRESETS = {
+  // 维护策略（2026-09-16 定，用户要求）：默认档**只添不删**。
+  // 依据是实测确认的机制：正向/负向是两个独立 CLIPTextEncode，互不挤占；
+  // 超 77 也不截断，ComfyUI 按 77 分块后再 cat 拼回（sd1_clip.py L637/L68）。
+  // 留几个无效词没有实际代价，删词反而会改掉用惯的默认行为。
+  // 所以 bad quality / worst quality / worst detail / too many toes /
+  // too many fingers(20帖) / username(94帖) 这些空转词**不要清理**。
+  // 作者推荐 + 社区通用（只保留 Danbooru 词库里真实存在的词）
+  // 注：author 这一档 2026-09-18 从界面的下拉框里去掉了（用户精简 UI），
+  //     数据留着，想恢复只要在 index 里加回一个 <option value="author"> 即可。
+  // 2026-09-16 追加「缺手指/缺肢」表达：missing finger(断指 160) + amputee(截肢 10860)
+  //   为什么不是用户说的 missing fingers 复数：线上精确比对是 0 帖空标签
+  //   （extra fingers 同样是 0 帖）；真标签是单数 missing_finger。
+  //   fewer digits(少指 6230) / extra digits(多指 534) 本来就在档里。
+  univ: "lowres, bad quality, worst quality, worst detail, username, signature, bad anatomy, bad hands, bad proportions, extra digits, fewer digits, long neck, jpeg artifacts, watermark, blurry, cropped, out of frame, too many fingers, too many toes, english text, speech bubble, artist name, web address, translated, hard-translated, missing finger, amputee",
+  // Illustrious 系通用的一套负向词（出处见 server.py 的 QUALITY 注释）—— 默认使用
+  author: "lowres, bad quality, worst quality, worst detail, username, signature",
+  none: "",
+  minimal: "bad anatomy, bad hands, jpeg artifacts",
+  full: ("worst quality, low quality, bad anatomy, bad hands, jpeg artifacts, "
+         + "signature, watermark, username, blurry, artist name" + ", too many fingers, too many toes"),
+  strong: ("worst quality, low quality, bad anatomy, bad hands, jpeg artifacts, "
+           + "signature, watermark, username, blurry, artist name, extra digits, "
+           + "fewer digits, mutated hands, bad proportions, long neck, "
+           + "flat color, washed out, low contrast, muted colors, grey, hazy" + ", too many fingers, too many toes"),
+};
+function composedNegative(){
+  const base = NEG_PRESETS[$("negPreset").value] || "";
+  const extra = (($("negative") || {}).value || "").trim();
+  return [base, extra].filter(Boolean).join(", ");
+}
+
+// 底模下拉框：列 ComfyUI 里实际装了的（caps.checkpoints），默认选中
+// caps.checkpoint —— 那是 server.py 按 config.json 定出来的默认值。
+// 前端不硬编码任何模型名。
+function fillCheckpoints(){
+  const sel = $("checkpoint");
+  if(!sel) return;
+  const list = (caps && caps.checkpoints) || [];
+  sel.innerHTML = "";
+  if(!list.length){
+    sel.innerHTML = "<option>（ComfyUI 里没装底模）</option>";
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  list.forEach(m => {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m;
+    if(m === caps.checkpoint) o.selected = true;
+    sel.appendChild(o);
+  });
+  // 换了底模就写回 config.json —— 下次打开还是这个，不用每次都选。
+  // 只在用户主动改的时候写：这里绑的是 change，不是 input。
+  sel.onchange = async () => {
+    const v = sel.value;
+    try{
+      const r = await fetch("/api/set_config", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({key:"checkpoint", value:v})}).then(r=>r.json());
+      if(!r.ok) throw new Error(r.error);
+      setStatus("底模已记住：" + v, "ok");
+    }catch(e){
+      setStatus("底模切换没保存：" + e.message, "err");
+    }
+  };
+}
+
+// ---------- 能力检测 ----------
+async function loadCaps(){
+  try{
+    const r = await fetch("/api/capabilities").then(r=>r.json());
+    if(!r.ok) throw new Error(r.error||"未知错误");
+    caps = r.data;
+    fillCheckpoints();      // 底模下拉框：列 ComfyUI 里装了的，默认选 config 指定的那个
+    const c = $("caps"); c.innerHTML = "";
+    const add = (label,on) => {
+      const s = document.createElement("span");
+      s.className = "pill " + (on?"on":"off");
+      s.textContent = label + (on?" ✓":" ✗");
+      c.appendChild(s);
+    };
+    add("ComfyUI", caps.comfy_online);
+    add("文生图", caps.txt2img);
+    add("图生图", caps.img2img);
+    add("草图", caps.sketch);
+    add("参考图", caps.reference);
+
+    // config.json 坏了：**必须说出来**。
+    // 坏掉的 config 不会报错，只是回退成"自动探测" —— 用户填的产出目录静默失效，
+    // 图跑到别处去。页头加一个红标签 + 状态栏写清原因和怎么修，
+    // 否则他永远不知道自己的配置没被用上。见 paths.CONFIG_ERROR。
+    if(caps.config_error){
+      const s = document.createElement("span");
+      s.className = "pill err";
+      s.textContent = "配置有问题";
+      s.title = caps.config_error;
+      c.appendChild(s);
+      setStatus("config.json 没生效：" + caps.config_error, "err");
+    }
+
+    // 折叠标题上的状态标签已去掉（页头这几个标签已经说明了可用性，重复）。
+    // 但"为什么不可用"那句解释挪到**被禁用的复选框**上 —— 鼠标移上去能看到，
+    // 不然只剩一个灰掉的框，不知道为什么灰。
+    if(!caps.sketch){
+      $("useSketch").disabled = true;
+      $("useSketch").title = "需要下载 ControlNet scribble 模型并重启 ComfyUI";
+    }
+    if(!caps.reference){
+      $("useRef").disabled = true;
+      const d = caps.reference_detail||{};
+      $("useRef").title = d.ipadapter_nodes_loaded
+        ? "节点已加载，但缺少模型文件"
+        : "IPAdapter 节点包未加载（需要重启 ComfyUI）";
+    }
+
+    // 局部重绘专用 ControlNet
+    const icn = $("inpControlNet");
+    if(icn){
+      icn.innerHTML = "";
+      const none = document.createElement("option");
+      none.value = ""; none.textContent = "不使用（纯底模重绘）";
+      icn.appendChild(none);
+      (caps.inpaint_controlnets || []).forEach(c => {
+        const o = document.createElement("option");
+        o.value = c; o.textContent = c;
+        icn.appendChild(o);
+      });
+      if((caps.inpaint_controlnets || []).length){
+        icn.value = caps.inpaint_controlnets[0];
+      } else {
+        none.textContent = "不使用（未检测到 inpainting 模型）";
+      }
+    }
+
+    // 草图 ControlNet 选择
+    const sd = caps.sketch_detail || {};
+    const list = sd.controlnets || [];
+    const sel = $("controlnet");
+    sel.innerHTML = "";
+    list.forEach(c => {
+      const o = document.createElement("option");
+      o.value = c.file;
+      o.textContent = c.label + "（" + c.file.replace(".safetensors","") + "）";
+      if (c.file === sd.default) o.selected = true;
+      sel.appendChild(o);
+    });
+    const updateCnHint = () => {
+      const cur = list.find(c => c.file === sel.value);
+      $("cnHint").textContent = cur ? "✓ " + cur.hint : "";
+    };
+    sel.onchange = updateCnHint;
+    updateCnHint();
+    if(!list.length) {
+      sel.innerHTML = '<option value="">（没有可用的 ControlNet）</option>';
+      $("cnHint").textContent = "把 ControlNet 模型放进 models\\controlnet 后刷新页面";
+    }
+
+    // LoRA：建立 文件 -> 元数据 索引，然后按类型分组渲染
+    loraMeta = {};
+    (caps.lora_details || []).forEach(d => { loraMeta[d.file] = d; });
+    if(!(caps.loras || []).length){
+      $("loraGroups").innerHTML =
+        '<div class="hint">没有检测到 LoRA，把文件放进 models\\loras 后刷新</div>';
+    } else {
+      renderLoraGroups();
+    }
+  }catch(e){
+    $("caps").innerHTML = '<span class="pill off">ComfyUI 未连接</span>';
+    setStatus("无法连接 ComfyUI：" + e.message, "err");
+  }
+}
+
+// ---------- LoRA 分组管理 ----------
+// Each entry is {id, name, strength}. Categories are derived from each LoRA's
+// own metadata (see classify_lora on the server), so an item moves to the
+// right group automatically - including ones added after a delete.
+// 二级菜单的候选分类用同一套完整列表，保证任何 LoRA 都能找到归属。
+// 之前每个一级分类只列 2-3 项，导致 anatomy_helper（style/Poses）成了孤儿：
+// 它的二级分类不在父级列表里，界面上就完全不显示。
+const ALL_SUBCATS = ["Character", "Celebrity", "Clothing", "Style", "Concept",
+                     "Background", "Tool", "Poses", "Objects", "Action",
+                     "Animal", "不兼容", "未识别"];
+const LORA_SUBCATS = {
+  character: ALL_SUBCATS, style: ALL_SUBCATS, quality: ALL_SUBCATS,
+  incompatible: ALL_SUBCATS, other: ALL_SUBCATS, unknown: ALL_SUBCATS,
+};
+// 二级分类的显示名（C站分类 + 中文注解）
+const SUBCAT_LABEL = {
+  Character: "Character 角色", Celebrity: "Celebrity 真人", Clothing: "Clothing 服装",
+  Style: "Style 画风", Concept: "Concept 概念", Background: "Background 背景",
+  Tool: "Tool 工具/增强", Poses: "Poses 姿势/解剖", Objects: "Objects 物件",
+  Action: "Action 动作", Animal: "Animal 动物",
+  "不兼容": "不兼容", "未识别": "未识别",
+};
+
+// 一级分组。二级（C站分类）从其下展开。
+const LORA_CATEGORIES = [
+  { kind:"character", title:"角色 / 概念", hint:"改人物长相 · 权重 0.7–0.9" },
+  { kind:"style",     title:"画风",       hint:"改整体画风 · 权重 0.6–0.8" },
+  { kind:"quality",   title:"画质增强",   hint:"提升细节 · 权重 0.5–0.8" },
+  { kind:"incompatible", title:"⚠ 不兼容（不要用）",
+    hint:"命名格式与 ComfyUI 不符，加载后不生效，还可能拖慢生成或污染画面" },
+  { kind:"other",     title:"其他",       hint:"未能自动归类" },
+  { kind:"unknown",   title:"未识别",     hint:"" },
+];
+let loraItems = [];
+let loraSeq = 0;
+
+// Pure helpers taking their data explicitly. The grouping logic previously
+// read the global `caps`/`loraMeta`, which made it (a) impossible to test
+// without a full page and (b) the source of the "re-added LoRA is not
+// categorised" bug: the category was computed once inside loadCaps and never
+// recomputed for later additions.
+function loraKindOf(name, meta){
+  const m = (meta && meta[name]) || {};
+  return m.kind || "unknown";
+}
+function loraDefaultStrength(kind){
+  return kind === "character" ? 0.85 : kind === "style" ? 0.7
+       : kind === "quality" ? 0.6 : 0.8;
+}
+
+/** Assign items into their categories. Pure: same inputs, same output. */
+function loraGroupItems(items, meta){
+  const byKind = {};
+  LORA_CATEGORIES.forEach(c => { byKind[c.kind] = []; });
+  items.forEach(it => {
+    const k = loraKindOf(it.name, meta);
+    (byKind[k] = byKind[k] || []).push(it);
+  });
+  return byKind;
+}
+
+/** Candidate file names for a category, so "+" adds something that belongs.
+ *
+ * No fallback to the full list:这一栏是分类结果本身，不是"兜底入口"。之前
+ * "other" 会回退到全部 LoRA，于是一个已判为 quality 的 LoRA 能被加进"其他"，
+ * 直接跑进错误的组里。空栏就让按钮禁用，显示"没有这个类型的 LoRA"。
+ */
+function loraPoolFor(kind, loras, meta){
+  return (loras || []).filter(l => loraKindOf(l, meta) === kind);
+}
+
+function addLoraItem(kindWanted, name){
+  const all = (caps && caps.loras) || [];
+  const pool = loraPoolFor(kindWanted, all, loraMeta);
+  const chosen = name || pool[0] || all[0] || "";
+  if(!chosen) return;
+  loraItems.push({
+    id: ++loraSeq,
+    name: chosen,
+    strength: loraDefaultStrength(loraKindOf(chosen, loraMeta)),
+  });
+  renderLoraGroups();
+}
+
+function removeLoraItem(id){
+  loraItems = loraItems.filter(x => x.id !== id);
+  renderLoraGroups();
+}
+
+/** LoRAs of one top-level kind whose sub-category matches. */
+function loraPoolForSub(kind, sub, loras, meta){
+  return (loras || []).filter(l =>
+    loraKindOf(l, meta) === kind && loraSubcatOf(l, meta) === sub);
+}
+
+function loraSubcatOf(name, meta){
+  const m = (meta && meta[name]) || {};
+  return m.category || "Concept";
+}
+
+// 二级分类的展开状态
+let subcatOpen = {};
+// 每个二级分类是否强制显示全部 LoRA
+let loraShowAll = {};
+
+function renderLoraGroups(){
+  const box = $("loraGroups");
+  box.innerHTML = "";
+  const all = (caps && caps.loras) || [];
+  const grouped = loraGroupItems(loraItems, loraMeta);
+
+  LORA_CATEGORIES.forEach(cat => {
+    const items = grouped[cat.kind] || [];
+    const det = document.createElement("details");
+    det.className = "loraGroup";
+    det.open = true;
+
+    const sum = document.createElement("summary");
+    sum.innerHTML = `${cat.title}<span class="gcount">${items.length} 个</span>`;
+    sum.title = cat.hint || "";
+    det.appendChild(sum);
+
+    const body = document.createElement("div");
+    body.className = "gbody";
+
+    // ---- 二级菜单：C站分类 ----
+    const subs = LORA_SUBCATS[cat.kind] || [];
+    let rendered = 0;
+    subs.forEach(sub => {
+      const mine = items.filter(it => loraSubcatOf(it.name, loraMeta) === sub);
+      const pool = loraPoolForSub(cat.kind, sub, all, loraMeta);
+      if(!mine.length && !pool.length) return;    // 无关的二级项不显示
+      rendered++;
+
+      const key = cat.kind + "/" + sub;
+      const sdet = document.createElement("details");
+      sdet.className = "loraSub";
+      sdet.open = subcatOpen[key] !== false;
+
+      const ssum = document.createElement("summary");
+      ssum.innerHTML = `${SUBCAT_LABEL[sub] || sub}`
+        + `<span class="gcount">已选 ${mine.length} · 可用 ${pool.length}</span>`;
+      ssum.onclick = () => { subcatOpen[key] = !sdet.open; };
+      sdet.appendChild(ssum);
+
+      const sbody = document.createElement("div");
+      sbody.className = "gbody";
+      mine.forEach(it => sbody.appendChild(
+        buildLoraRow(it, all, cat.kind, sub)));
+
+      const add = document.createElement("button");
+      add.className = "ghost addLora";
+      add.textContent = "＋ 添加" + (SUBCAT_LABEL[sub] || sub);
+      add.disabled = pool.length === 0;
+      if(add.disabled) add.title = "这个二级分类下没有可用的 LoRA";
+      add.onclick = () => addLoraItem(cat.kind, pool[0]);
+      sbody.appendChild(add);
+
+      sdet.appendChild(sbody);
+      body.appendChild(sdet);
+    });
+
+    if(!rendered){
+      const e = document.createElement("div");
+      e.className = "hint";
+      e.style.marginBottom = "7px";
+      e.textContent = cat.hint ? "（空）" + cat.hint : "（空）";
+      body.appendChild(e);
+    }
+
+    det.appendChild(body);
+    box.appendChild(det);
+  });
+}
+
+function buildLoraRow(it, all, kind, sub){
+  // 下拉框只列「同一个二级分类」下的 LoRA，避免几十个选项混在一起。
+  // 当前已有的那个无论如何都要保留，否则改选后就找不回来了。
+  const scoped = (kind && sub)
+    ? all.filter(l => loraKindOf(l, loraMeta) === kind
+                   && loraSubcatOf(l, loraMeta) === sub)
+    : all.slice();
+  if(!scoped.includes(it.name)) scoped.unshift(it.name);
+  const row = document.createElement("div");
+  row.className = "loraRow";
+
+  const sel = document.createElement("select");
+  // 先放一个「显示全部」的切换项
+  const showAllKey = "__all__";
+  const showAllOn = loraShowAll[showAllKey + kind + sub] === true;
+  {
+    const o = document.createElement("option");
+    o.value = "__toggle_all__";
+    o.textContent = showAllOn
+      ? "▲ 只显示本分类（当前显示全部）"
+      : "▼ 显示全部 LoRA（当前只显示本分类）";
+    sel.appendChild(o);
+  }
+  (showAllOn ? all : scoped).forEach(l => {
+    const m = (loraMeta && loraMeta[l]) || {};
+    const o = document.createElement("option");
+    o.value = l;
+    // 原名在前、中文名放括号里；不再重复类型（所在分组已经说明了类型）
+    o.textContent = m.alias ? (l + "（" + m.alias + "）") : l;
+    o.title = m.alias_note ? (m.alias_note + "\n文件: " + l) : l;
+    if(l === it.name) o.selected = true;
+    sel.appendChild(o);
+  });
+
+  const rng = document.createElement("input");
+  rng.type = "range"; rng.min = "0"; rng.max = "1.5"; rng.step = "0.05";
+  rng.value = it.strength;
+
+  const val = document.createElement("span");
+  val.className = "val";
+  val.textContent = Number(it.strength).toFixed(2);
+
+  const del = document.createElement("button");
+  del.className = "ghost del";
+  del.textContent = "×";
+  del.title = "移除这个 LoRA";
+
+  const trig = document.createElement("div");
+  trig.className = "hint trig";
+
+  const refreshTrig = () => {
+    const m = (loraMeta && loraMeta[it.name]) || {};
+    const td = m.trigger_detail || {};
+    const list = td.all || [];
+    trig.textContent = "";
+
+    // 第一行：中文作用说明 + C站链接
+    // class="note" 让 CSS 里的 white-space:pre-line 生效，说明里的换行才真的换行
+    if(m.alias_note){
+      const d = document.createElement("div");
+      d.className = "note";
+      d.textContent = m.alias_note;
+      trig.appendChild(d);
+    }
+    if(m.alias_url){
+      const a = document.createElement("a");
+      a.href = m.alias_url;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.textContent = "C站原帖 ↗";
+      a.style.cssText = "color:var(--accent);font-size:11px;margin-right:8px";
+      trig.appendChild(a);
+    }
+    // 第二行：触发词（不再自动加入，改为可复制到自己填写）
+    const t2 = document.createElement("div");
+    if(list.length){
+      t2.textContent = "";
+      const head = document.createElement("div");
+      head.innerHTML = '<span style="color:var(--dim2)">触发词（'
+        + list.length + ' 组，点「填入」加到提示词框）：</span>';
+      t2.appendChild(head);
+      list.forEach((w, i) => {
+        const line = document.createElement("div");
+        line.style.cssText = "display:flex;gap:6px;align-items:flex-start;margin-top:3px";
+        const btn = document.createElement("button");
+        btn.className = "ghost";
+        btn.textContent = list.length > 1 ? ("填入 " + (i + 1)) : "填入";
+        btn.style.cssText = "padding:1px 7px;font-size:11px;flex:none";
+        btn.onclick = () => {
+          const box = $("promptCN");
+          const before = (box.value || "");
+          appendToPrompt(w);
+          const added = (box.value || "") !== before;
+          btn.classList.remove("pbFlash"); void btn.offsetWidth;
+          btn.classList.add("pbFlash");
+          btn.textContent = added ? "已填入" : "已存在";
+          setTimeout(() => { btn.textContent = list.length > 1 ? ("填入 " + (i + 1)) : "填入"; btn.classList.remove("pbFlash"); }, 1100);
+        };
+        const span = document.createElement("span");
+        span.style.cssText = "color:var(--ok);word-break:break-all";
+        span.textContent = w;
+        line.appendChild(btn);
+        line.appendChild(span);
+        t2.appendChild(line);
+      });
+    } else if(td.candidates && td.candidates.length && !td.confident){
+      t2.innerHTML = '<span style="color:var(--warn)">未自动添加：</span>'
+                   + (td.note || "") + '<br>候选标签：'
+                   + td.candidates.slice(0, 8).join(", ");
+    } else {
+      t2.textContent = td.note || (it.name
+        ? "该 LoRA 无触发词，挂上即生效，靠权重调节" : "");
+    }
+    trig.appendChild(t2);
+  };
+
+  sel.onchange = () => {
+    if(sel.value === "__toggle_all__"){
+      loraShowAll[showAllKey + kind + sub] = !showAllOn;
+      renderLoraGroups();
+      return;
+    }
+    // Reassigning the file can change its category, so re-render the groups.
+    it.name = sel.value;
+    it.strength = loraDefaultStrength(loraKindOf(it.name, loraMeta));
+    renderLoraGroups();
+  };
+  rng.oninput = () => { it.strength = parseFloat(rng.value);
+                        val.textContent = it.strength.toFixed(2); };
+  del.onclick = () => removeLoraItem(it.id);
+
+  row.appendChild(sel); row.appendChild(rng); row.appendChild(val);
+  row.appendChild(del); row.appendChild(trig);
+  refreshTrig();
+  return row;
+}
+
+// ---------- 翻译（实时） ----------
+let tTimer = null;
+async function doTranslate(){
+  const t = $("promptCN").value.trim();
+  if(!t){ $("transOut").textContent = "翻译结果会显示在这里"; return; }
+  try{
+    const r = await fetch("/api/translate", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({text:t})}).then(r=>r.json());
+    if(!r.ok){ $("transOut").textContent = "翻译出错：" + r.error; return; }
+    let html = r.english ? "<b>→ " + r.english + "</b>" : "没有识别出任何标签，换个说法试试";
+    if(r.unknown && r.unknown.length)
+      html += '<div class="unk">未收录：' + r.unknown.join(" ") + "（这部分不会进入模型）</div>";
+    // 手打的英文片段会照常进入提示词（这是有意的，用户可以写模型认得、
+    // 词库没收录的标签），但本体可能不是真标签。不拦截，只说明 ——
+    // 否则预览显示「→ han」会让人以为识别成功了。
+    //
+    // 误报率实测：面板标签组合 400 条提示词 0 条误报；词库快照缺的那些基础
+    // 单词（hands/eyes/face/hair/waist/mouth）也不会被误报，因为
+    // is_known_tag 会查 _SUPPLEMENT 的值，这一层把缺口挡住了。
+    if(r.not_tags && r.not_tags.length)
+      html += '<div class="unk">不是词库里的标签：' + r.not_tags.join(" ")
+            + "（会照常写进提示词，但模型可能不认识）</div>";
+    $("transOut").innerHTML = html;
+  }catch(e){ $("transOut").textContent = "翻译服务不可用：" + e.message; }
+}
+$("promptCN").addEventListener("input", () => {
+  clearTimeout(tTimer); tTimer = setTimeout(doTranslate, 400);
+});
+
+// ---------- Tab ----------
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  mode = t.dataset.mode;
+  const isI2I = (mode === "img2img");
+  $("sourceWrap").style.display = isI2I ? "" : "none";
+  $("denoiseWrap").style.display = isI2I ? "" : "none";
+  // 说明文字跟着控件一起显示/隐藏，文生图下不显示重绘幅度的说明
+  const dh = $("dnHint");
+  if(dh) dh.style.display = isI2I ? "" : "none";
+});
+
+// ---------- 滑杆显示 ----------
+const bind = (id, out, f) => {
+  const el = $(id);
+  const upd = () => $(out).textContent = f(parseFloat(el.value));
+  el.oninput = upd; upd();
+};
+bind("sketchStrength","skVal", v=>v.toFixed(2));
+bind("refStrength","rfVal", v=>v.toFixed(2));
+bind("depthStrength","dpVal", v=>v.toFixed(2));
+bind("steps","stVal", v=>v.toFixed(0));
+bind("cfg","cfgVal", v=>v.toFixed(1));
+bind("clipSkip","csVal", v=>v.toFixed(0));
+bind("denoise","dnVal", v=>v.toFixed(2));
+// ControlNet 的「模型影响强度」滑块一直能传对值，但它的数字标签漏了绑定，
+// 拖动手感上像没生效 —— 显示永远停在 0.8。
+bind("inpCnStrength","cnVal", v=>v.toFixed(2));
+
+// ---------- 文件选择 ----------
+function wireDrop(dropId, inputHandler){
+  const d = $(dropId);
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.style.display = "none";
+  // 给动态建出来的 file 控件一个可预测的 id：它不在 HTML 里，出问题时
+  // 光靠"第几个 input"根本找不到，自动化测试也没法选中它。
+  inp.id = dropId + "File";
+  document.body.appendChild(inp);
+  d.onclick = () => inp.click();
+  inp.onchange = () => { if(inp.files[0]) inputHandler(inp.files[0]); inp.value=""; };
+  d.ondragover = e => { e.preventDefault(); d.classList.add("over"); };
+  d.ondragleave = () => d.classList.remove("over");
+  d.ondrop = e => {
+    e.preventDefault(); d.classList.remove("over");
+    if(e.dataTransfer.files[0]) inputHandler(e.dataTransfer.files[0]);
+  };
+}
+
+// Convert bytes to base64 in fixed-size chunks.
+// NOTE: do NOT use String.fromCharCode(...new Uint8Array(buf)) - the spread
+// turns every byte into a function argument, so any image past a few hundred
+// KB throws "Maximum call stack size exceeded".
+function bytesToBase64(bytes){
+  const CHUNK = 0x8000;                 // 32 KB per call
+  let out = "";
+  for (let i = 0; i < bytes.length; i += CHUNK){
+    out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(out);
+}
+
+// ---------- 蒙版编辑器（手动涂抹 → 局部重绘） ----------
+// 画布上是"原图 + 半透明红色标记"；导出时换成 alpha 通道：
+// alpha=255 表示"要重绘"（涂过的地方），alpha=0 表示保留。
+// 这个极性与 ComfyUI 的 VAEEncodeForInpaint 一致（白色=重绘区）。
+let maskState = { path:null, strokes:[], drawing:false, size:48 };
+
+function openMaskEditor(path){
+  maskState.path = path;
+  maskState.strokes = [];
+  maskState.drawing = false;
+  $("maskStatus").textContent = "";
+  $("maskStatus").className = "status";
+  $("maskModal").classList.add("on");
+  const cv = $("maskCanvas");
+  const img = new Image();
+  img.onload = () => {
+    // canvas 保持原图分辨率，CSS 缩放显示 —— 这样蒙版与原图像素一一对应，
+    // 后端不会因为尺寸不符而缩放错位
+    cv.width = img.naturalWidth;
+    cv.height = img.naturalHeight;
+    // 显式按原图比例设定显示尺寸。canvas 不像 <img> 那样自动保持比例，
+    // 只给 max-width/max-height 会被容器分别挤压，导致涂抹时画面对不上。
+    cv.style.aspectRatio = img.naturalWidth + " / " + img.naturalHeight;
+    cv.style.width = "auto";
+    cv.style.height = "auto";
+    maskState.img = img;
+    redrawMask();
+    setTimeout(() => { maskFit(); initMaskZoomOnce(); }, 0);
+  };
+  img.onerror = () => {
+    $("maskStatus").textContent = "图片加载失败";
+    $("maskStatus").className = "status err";
+  };
+  img.src = "/api/image?path=" + encodeURIComponent(path) + "&t=" + Date.now();
+}
+
+function redrawMask(){
+  const cv = $("maskCanvas");
+  const ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if(maskState.img) ctx.drawImage(maskState.img, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(255,64,64,0.55)";
+  maskState.strokes.forEach(s => {
+    ctx.lineWidth = s.size;
+    ctx.beginPath();
+    if(s.pts.length === 1){
+      ctx.arc(s.pts[0].x, s.pts[0].y, s.size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,64,64,0.55)";
+      ctx.fill();
+    }else{
+      ctx.moveTo(s.pts[0].x, s.pts[0].y);
+      s.pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+    }
+  });
+}
+
+
+// ---------- 蒙版编辑器：滚轮缩放 + 拖动平移 ----------
+// 视口高度有限，靠改布局放大有上限；缩放才是解决办法。
+// 画布保持原图像素尺寸不变（导出的蒙版才能与原图一一对应），
+// 只在显示层用 transform 缩放平移。
+const maskView = { zoom: 1, x: 0, y: 0 };
+
+function maskApplyView(){
+  const cv = $("maskCanvas");
+  if(!cv) return;
+  cv.style.transformOrigin = "0 0";
+  cv.style.transform = "translate(" + maskView.x + "px," + maskView.y + "px) scale(" + maskView.zoom + ")";
+  const z = $("maskZoomVal");
+  if(z) z.textContent = Math.round(maskView.zoom * 100) + "%";
+}
+
+function maskFit(){
+  const cv = $("maskCanvas"), stage = document.querySelector(".maskStage");
+  if(!cv || !stage || !cv.width) return;
+  const r = stage.getBoundingClientRect();
+  const availW = r.width - 14, availH = r.height - 14;
+  maskView.zoom = Math.max(0.05, Math.min(availW / cv.width, availH / cv.height));
+  maskView.x = (availW - cv.width * maskView.zoom) / 2 + 7;
+  maskView.y = (availH - cv.height * maskView.zoom) / 2 + 7;
+  maskApplyView();
+}
+
+function maskZoomAt(cx, cy, factor){
+  const cv = $("maskCanvas");
+  if(!cv) return;
+  const before = maskView.zoom;
+  const next = Math.max(0.1, Math.min(20, before * factor));
+  if(next === before) return;
+  // 让光标下的那个点保持不动
+  maskView.x = cx - (cx - maskView.x) * (next / before);
+  maskView.y = cy - (cy - maskView.y) * (next / before);
+  maskView.zoom = next;
+  maskApplyView();
+}
+
+let _zoomWired = false;
+function initMaskZoomOnce(){
+  if(_zoomWired) return; _zoomWired = true;
+  initMaskZoom();
+}
+
+function initMaskZoom(){
+  const cv = $("maskCanvas");
+  if(!cv) return;
+  cv.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const r = cv.getBoundingClientRect();
+    maskZoomAt(ev.clientX - r.left, ev.clientY - r.top,
+               ev.deltaY < 0 ? 1.12 : 1 / 1.12);
+  }, { passive: false });
+
+  // 中键或按住空格拖动平移；左键保持涂抹
+  let panning = false, lx = 0, ly = 0, spaceDown = false;
+  window.addEventListener("keydown", e => { if(e.code === "Space") spaceDown = true; });
+  window.addEventListener("keyup",   e => { if(e.code === "Space") spaceDown = false; });
+  cv.addEventListener("pointerdown", ev => {
+    if(ev.button === 1 || (ev.button === 0 && spaceDown)){
+      panning = true; lx = ev.clientX; ly = ev.clientY;
+      cv.setPointerCapture(ev.pointerId);
+      cv.style.cursor = "grabbing";
+      ev.preventDefault();
+    }
+  });
+  cv.addEventListener("pointermove", ev => {
+    if(!panning) return;
+    maskView.x += ev.clientX - lx;
+    maskView.y += ev.clientY - ly;
+    lx = ev.clientX; ly = ev.clientY;
+    maskApplyView();
+    ev.preventDefault();
+  });
+  const endPan = ev => {
+    if(panning){ panning = false; cv.style.cursor = "crosshair"; }
+  };
+  cv.addEventListener("pointerup", endPan);
+  cv.addEventListener("pointercancel", endPan);
+
+  // 按钮
+  const bind = (id, fn) => { const b = $(id); if(b) b.onclick = fn; };
+  bind("maskZoomIn",  () => {
+    const r = cv.getBoundingClientRect();
+    maskZoomAt(r.width / 2, r.height / 2, 1.25);
+  });
+  bind("maskZoomOut", () => {
+    const r = cv.getBoundingClientRect();
+    maskZoomAt(r.width / 2, r.height / 2, 1 / 1.25);
+  });
+  bind("maskZoomFit", maskFit);
+  bind("maskZoom100", () => { maskView.zoom = 1; maskView.x = 0; maskView.y = 0; maskApplyView(); });
+}
+
+function canvasPos(cv, ev){
+  // 画布显示时被 CSS transform 缩放平移，要把屏幕坐标换算回画布像素坐标。
+  // 分母用 rect.width / cv.width（即真实的显示/属性比例），不要用 maskView.zoom ——
+  // 两者不严格相等（zoom 是我们记的值，rect 是浏览器实际渲染的结果），
+  // 用错会导致涂抹位置整体偏移，且偏移随缩放放大。
+  const r = cv.getBoundingClientRect();
+  const sx = cv.width ? r.width / cv.width : 1;
+  const sy = cv.height ? r.height / cv.height : 1;
+  return {
+    x: sx ? (ev.clientX - r.left) / sx : 0,
+    y: sy ? (ev.clientY - r.top) / sy : 0
+  };
+}
+
+function initMaskCanvas(){
+  const cv = $("maskCanvas");
+  cv.addEventListener("pointerdown", ev => {
+    if(!maskState.img) return;
+    cv.setPointerCapture(ev.pointerId);
+    maskState.drawing = true;
+    maskState.strokes.push({ size: maskState.size, pts: [canvasPos(cv, ev)] });
+    redrawMask();
+  });
+  cv.addEventListener("pointermove", ev => {
+    if(!maskState.drawing) return;
+    const s = maskState.strokes[maskState.strokes.length - 1];
+    if(!s) return;
+    const p = canvasPos(cv, ev);
+    const last = s.pts[s.pts.length - 1];
+    if(Math.hypot(p.x - last.x, p.y - last.y) < 2) return;
+    s.pts.push(p);
+    redrawMask();
+  });
+  const stop = () => { maskState.drawing = false; };
+  cv.addEventListener("pointerup", stop);
+  cv.addEventListener("pointercancel", stop);
+  cv.addEventListener("pointerleave", stop);
+}
+
+/** 导出蒙版：RGB=黑，alpha=涂抹处为 0（透明），其余 255 */
+function exportMaskDataURL(){
+  const cv = $("maskCanvas");
+  const out = document.createElement("canvas");
+  out.width = cv.width; out.height = cv.height;
+  const octx = out.getContext("2d");
+  octx.fillStyle = "#000";
+  octx.fillRect(0, 0, out.width, out.height);
+  // 用涂抹区域当"橡皮"：先画满不透明，再把涂抹处擦成透明
+  octx.globalCompositeOperation = "destination-out";
+  octx.lineCap = "round";
+  octx.lineJoin = "round";
+  maskState.strokes.forEach(s => {
+    octx.lineWidth = s.size;
+    octx.beginPath();
+    if(s.pts.length === 1){
+      octx.arc(s.pts[0].x, s.pts[0].y, s.size / 2, 0, Math.PI * 2);
+      octx.fillStyle = "#000";
+      octx.fill();
+    }else{
+      octx.moveTo(s.pts[0].x, s.pts[0].y);
+      s.pts.slice(1).forEach(p => octx.lineTo(p.x, p.y));
+      octx.stroke();
+    }
+  });
+  octx.globalCompositeOperation = "source-over";
+  const url = out.toDataURL("image/png");
+  const b64 = url.split(",")[1] || "";
+  return { url, bytes: Math.floor(b64.length * 3 / 4) };
+}
+
+async function runInpaint(){
+  if(!maskState.path){ return; }
+  if(!maskState.strokes.length){
+    $("maskStatus").textContent = "请先在图上涂抹要重画的区域";
+    $("maskStatus").className = "status err";
+    return;
+  }
+  const m = exportMaskDataURL();
+  const btn = $("maskRun");
+  // ★ 先挡住"两边都没提示词"这种情况。
+  //   实测（以用户视角走一遍）：蒙版框留空、主界面也空着，点下去**真的跑了
+  //   187 秒**，然后拿 `masterpiece, best quality` 去重画 —— 用户会觉得重绘坏了。
+  //   主界面的「生成」按钮早就有这道闸，重绘这条路漏了。
+  const _ip = ($("inpPrompt").value || "").trim();
+  const _mp = ($("promptCN").value || "").trim();
+  if(!_ip && !_mp){
+    $("maskStatus").className = "status err";
+    $("maskStatus").textContent = ($("inpPrompt").placeholder
+      || "留空 = 沿用左边主界面的提示词") +
+      "；现在两边都是空的 —— 先写一句要画成什么样再点。";
+    $("inpPrompt").focus();
+    return;
+  }
+  btn.disabled = true;
+  // ★ 首次重绘要现加载 Inpainting ControlNet（2.3 GB），实测**187 秒**；
+  //   热了之后才是十几到几十秒。原来只写"约 15–40 秒"，用户会以为卡死了。
+  //   （主界面的「生成」早就写了"首次加载模型会慢一些"，这里对齐。）
+  $("maskStatus").textContent = "重画中…（首次要加载 Inpainting 模型，可能要 2–3 分钟；之后约 15–40 秒）";
+  $("maskStatus").className = "status";
+  try{
+    const r = await fetch("/api/inpaint", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        path: maskState.path,
+        mask: m.url,
+        // 底模跟主界面选的一致 —— 不送的话后端用自己的兜底值，
+        // 换了底模去修图会静默地回到旧模型
+        checkpoint: $("checkpoint").value || null,
+        denoise: parseFloat($("inpDenoise").value),
+        clip_skip: parseInt($("clipSkip").value),
+        // ★ 这几个原来没送：后端 build_inpaint_graph 读的是 p.get("steps", 30)
+        //   这类兜底值，于是「步数 / CFG / 采样器 / 调度器」四个滑杆和下拉框
+        //   在局部重绘里**完全不生效**，界面却看不出来（值在那儿摆着）。
+        //   同类的坑还有 seed：不送就等于每次重绘都用同一个种子。
+        steps: parseInt($("steps").value),
+        cfg: parseFloat($("cfg").value),
+        sampler: $("sampler").value,
+        scheduler: $("scheduler").value,
+        seed: ($("seed").value || "").trim() ? Number($("seed").value) : null,
+        mask_grow: parseInt($("inpGrow").value),
+        mask_feather: parseInt($("inpFeather").value),
+        blend: $("inpBlend").value,
+        inpaint_controlnet: $("inpControlNet").value,
+        controlnet_strength: parseFloat($("inpCnStrength").value),
+        prompt: ($("inpPrompt").value || "").trim(),
+        // 留空时后端用这段回退（之前 UI 写了这个承诺但没人实现）
+        main_prompt: ($("promptCN").value || "").trim(),
+        negative: composedNegative(),
+        quality: selectedQuality(),
+        loras: loraItems.map(it => {
+          const mm = (loraMeta && loraMeta[it.name]) || {};
+          const td = mm.trigger_detail || {};
+          return { name: it.name, strength: Number(it.strength),
+                   triggers: [] };
+        }).filter(x => x.name),
+      })}).then(r => r.json());
+    if(!r.ok){
+      $("maskStatus").textContent = "失败：" + r.error;
+      $("maskStatus").className = "status err";
+      return;
+    }
+    if(r.unknown && r.unknown.length){
+      $("maskStatus").textContent = "完成。但这些词没收录：" + r.unknown.join(" ");
+      $("maskStatus").className = "status err";
+      return;
+    }
+    let msg = "完成，已保存到输出目录";
+    if(r.used_prompt) msg += "　用的提示词：" + r.used_prompt.slice(0, 70);
+    $("maskStatus").textContent = msg;
+    $("maskStatus").className = "status ok";
+    maskState.strokes = [];
+    redrawMask();
+    showFiles(r.files);
+    // 修完立刻可对比
+    if(r.files && r.files[0]) openCompare(maskState.path, r.files[0],
+      "左＝修图前　右＝修图后　拖动滑杆对比");
+    loadRecent();
+  }catch(e){
+    $("maskStatus").textContent = "失败：" + e.message;
+    $("maskStatus").className = "status err";
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function bindMaskUI(){
+  initMaskCanvas();
+  const bindV = (id, out, f) => {
+    const el = $(id), o = $(out);
+    if(!el || !o) return;
+    el.oninput = () => { o.textContent = f(el.value); };
+    o.textContent = f(el.value);
+  };
+  bindV("brushSize", "brushVal", v => v);
+  bindV("inpDenoise", "inpVal", v => Number(v).toFixed(2));
+  bindV("inpFeather", "inpFeatherVal", v => v);
+  bindV("inpGrow", "inpGrowVal", v => v);
+  $("brushSize").addEventListener("input", e => {
+    maskState.size = parseInt(e.target.value);
+  });
+  $("maskClear").onclick = () => {
+    maskState.strokes = []; redrawMask();
+    $("maskStatus").textContent = "";
+  };
+  $("maskUndo").onclick = () => {
+    maskState.strokes.pop(); redrawMask();
+  };
+  $("maskRun").onclick = runInpaint;
+  $("maskClose").onclick = () => $("maskModal").classList.remove("on");
+  $("maskModal").addEventListener("click", ev => {
+    if(ev.target === $("maskModal")) $("maskModal").classList.remove("on");
+  });
+}
+bindMaskUI();
+
+// ---------- 修图前后对比 ----------
+// 用 canvas 绘制：左半显示修图前，右半显示修图后，中间一条分割线。
+// 比双 <img> 叠放可靠（不依赖 clip-path 的兼容性），也能直接算差异高亮。
+let cmpState = { a:null, b:null, imgA:null, imgB:null,
+                 mode:"wipe", slider:50, diff:null, flip:false };
+
+function loadImg(src){
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error("图加载失败"));
+    im.src = src;
+  });
+}
+
+async function openCompare(beforePath, afterPath, info){
+  try{
+    $("cmpModal").classList.add("on");
+    $("cmpInfo").textContent = "加载中…";
+    cmpState.beforePath = beforePath;
+    cmpState.afterPath = afterPath;
+    const t = Date.now();
+    const [ia, ib] = await Promise.all([
+      loadImg("/api/image?path=" + encodeURIComponent(beforePath) + "&t=" + t),
+      loadImg("/api/image?path=" + encodeURIComponent(afterPath) + "&t=" + t),
+    ]);
+    cmpState.imgA = ia; cmpState.imgB = ib;
+    cmpState.mode = "wipe";
+    cmpState.slider = 50;
+    // 每次打开都回到默认的「左前右后」，否则上一次点过「切换左右」会留在
+    // 下一次对比里，看着像图对调了。
+    cmpState.flip = false;
+    $("cmpSlider").value = 50;
+    drawCompare();
+    $("cmpInfo").textContent = info || "";
+  }catch(e){
+    $("cmpInfo").textContent = "对比失败：" + e.message;
+  }
+}
+
+/** 切换左右：只交换两边的显示位置，不改判定出来的差异。 */
+function cmpFlipSides(){
+  if(!cmpState.imgA || !cmpState.imgB) return;
+  cmpState.flip = !cmpState.flip;
+  drawCompare();
+}
+
+function drawCompare(){
+  const ia = cmpState.imgA, ib = cmpState.imgB;
+  if(!ia || !ib) return;
+  const cv = $("cmpCanvas");
+  const W = ia.naturalWidth, H = ia.naturalHeight;
+  // 切换左右之后，「前」和「后」互换画布两侧；差异高亮本身与左右无关，
+  // 所以 diff 分支照旧用原顺序计算，不受 flip 影响。
+  const left  = cmpState.flip ? ib : ia;
+  const right = cmpState.flip ? ia : ib;
+  const leftLabel  = cmpState.flip ? "修图后" : "修图前";
+  const rightLabel = cmpState.flip ? "修图前" : "修图后";
+  const rw = Math.max(14, Math.round(W / 40)) * 4.2;
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, W, H);
+
+  if(cmpState.mode === "side"){
+    // 并排：左原图 右修后
+    cv.width = W * 2; cv.height = H;
+    ctx.drawImage(left, 0, 0, W, H);
+    ctx.drawImage(right, W, 0, W, H);
+    ctx.strokeStyle = cssv("--ok"); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W, H); ctx.stroke();
+    return;
+  }
+
+  const cut = Math.round(W * cmpState.slider / 100);
+  if(cmpState.mode === "diff"){
+    // 差异高亮：以原图为底，差异大的地方涂成红色
+    ctx.drawImage(ia, 0, 0, W, H);
+    if(!cmpState.diff || cmpState.diff.width !== W){
+      const c2 = document.createElement("canvas");
+      c2.width = W; c2.height = H;
+      const x2 = c2.getContext("2d");
+      x2.drawImage(ia, 0, 0, W, H);
+      const da = x2.getImageData(0, 0, W, H);
+      x2.clearRect(0, 0, W, H);
+      x2.drawImage(ib, 0, 0, W, H);
+      const db = x2.getImageData(0, 0, W, H);
+      const out = x2.createImageData(W, H);
+      for(let i = 0; i < da.data.length; i += 4){
+        const d = (Math.abs(da.data[i]-db.data[i])
+                 + Math.abs(da.data[i+1]-db.data[i+1])
+                 + Math.abs(da.data[i+2]-db.data[i+2])) / 3;
+        // 阈值化：只标出明显差异，弱差异忽略
+        const on = d > 14;
+        out.data[i]   = on ? 255 : da.data[i];
+        out.data[i+1] = on ? 40  : da.data[i+1];
+        out.data[i+2] = on ? 40  : da.data[i+2];
+        out.data[i+3] = 255;
+      }
+      const c3 = document.createElement("canvas");
+      c3.width = W; c3.height = H;
+      c3.getContext("2d").putImageData(out, 0, 0);
+      cmpState.diff = c3;
+    }
+    ctx.drawImage(cmpState.diff, 0, 0, W, H);
+    return;
+  }
+
+  // wipe：左原图 / 右修后（顺序受「切换左右」影响）
+  ctx.drawImage(left, 0, 0, W, H);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(cut, 0, W - cut, H); ctx.clip();
+  ctx.drawImage(right, 0, 0, W, H);
+  ctx.restore();
+  ctx.strokeStyle = cssv("--ok"); ctx.lineWidth = Math.max(2, W / 400);
+  ctx.beginPath(); ctx.moveTo(cut, 0); ctx.lineTo(cut, H); ctx.stroke();
+  // 标签
+  const fs = Math.max(14, Math.round(W / 40));
+  ctx.font = fs + "px sans-serif";
+  const pad = fs * 0.4;
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, fs * 4.2, fs * 1.5);
+  ctx.fillStyle = "#fff"; ctx.fillText(leftLabel, pad, fs * 1.05);
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(W - rw, 0, rw, fs * 1.5);
+  ctx.fillStyle = cssv("--ok"); ctx.fillText(rightLabel, W - rw + pad, fs * 1.05);
+}
+
+function bindCompareUI(){
+  const cv = $("cmpCanvas");
+  let dragging = false;
+  const setFromEvent = ev => {
+    const r = cv.getBoundingClientRect();
+    const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    cmpState.slider = Math.max(0, Math.min(100, (x / r.width) * 100));
+    $("cmpSlider").value = Math.round(cmpState.slider);
+    drawCompare();
+  };
+  cv.addEventListener("pointerdown", ev => { dragging = true; setFromEvent(ev); });
+  cv.addEventListener("pointermove", ev => { if(dragging) setFromEvent(ev); });
+  window.addEventListener("pointerup", () => { dragging = false; });
+  $("cmpSlider").oninput = e => { cmpState.slider = +e.target.value; drawCompare(); };
+  $("cmpFull").onclick = () => { cmpState.mode = "wipe"; drawCompare(); };
+  $("cmpDiff").onclick = () => { cmpState.mode = "diff"; drawCompare(); };
+  $("cmpOneToTwo").onclick = () => { cmpState.mode = "side"; drawCompare(); };
+  // 这个按钮之前没有任何绑定 —— 有样式、能点、点了什么都不发生。
+  $("cmpFlip").onclick = cmpFlipSides;
+  $("cmpClose").onclick = () => $("cmpModal").classList.remove("on");
+  $("cmpModal").addEventListener("click", ev => {
+    if(ev.target === $("cmpModal")) $("cmpModal").classList.remove("on");
+  });
+}
+bindCompareUI();
+
+// ---------- 站内看图（左右切换） ----------
+// 需求原话："点开一张图片直接另起一个浏览器标签页，做不到像系统照片应用那样
+// 左右切换查看"。所以做成站内浮层：打开时把**当前列表**整份拿进来，
+// 按 ← → 在列表里走，不走网络重新取列表（列表已经在内存里了）。
+let viewList = [];      // 当前翻页的列表，元素同 /api/recent 的返回项
+let viewAt = 0;
+
+/** 一串路径 -> 看图用的列表项。给"本次生成结果"这种只有路径的地方用。 */
+function viewListFromPaths(paths){
+  return (paths || []).map(p => ({
+    path: p,
+    name: String(p).split(/[\\/]/).pop(),
+    mtime: 0,
+  }));
+}
+
+function viewerOpen(list, idx){
+  viewList = (list || []).slice();
+  if(!viewList.length) return;
+  viewAt = Math.max(0, Math.min(idx, viewList.length - 1));
+  $("viewModal").classList.add("on");
+  viewerShow();
+}
+function viewerShow(){
+  const f = viewList[viewAt];
+  if(!f) return;
+  const first = viewAt <= 0, last = viewAt >= viewList.length - 1;
+  $("viewName").textContent = f.name || "";
+  $("viewIdx").textContent = (viewAt + 1) + " / " + viewList.length
+    + (f.mtime ? "　" + new Date(f.mtime * 1000).toLocaleString() : "")
+    + (viewList.length > 1 && last ? "　（到头了）" : "");
+  const img = $("viewImg");
+  // 带 t= 是为了"修完图再看同一路径"能刷新，不是缓存问题
+  img.src = "/api/image?path=" + encodeURIComponent(f.path) + "&t=" + (f.mtime || 0);
+  img.alt = f.name || "";
+  // 到头就置灰，让人看得见"这是最后一张"，而不是按了没反应
+  $("viewPrev").disabled = first;
+  $("viewNext").disabled = last;
+  const cmp = $("viewCmp");
+  cmp.style.display = f.prev ? "" : "none";
+  cmp.onclick = () => {
+    $("viewModal").classList.remove("on");
+    openCompare(f.prev, f.path);
+  };
+  $("viewFix").onclick = () => {
+    $("viewModal").classList.remove("on");
+    openMaskEditor(f.path);
+  };
+  // 放大：关掉浮层再调 upscale —— 它的进度和结果都显示在右栏的「最近产出」里，
+  // 浮层盖着的话用户根本看不到。
+  $("viewUp").onclick = () => {
+    viewerClose();
+    upscale(f.path, null);
+  };
+  $("viewDel").onclick = async () => {
+    const gone = await deleteImage(f.path);
+    if(!gone) return;
+    // 从当前翻页列表里摘掉，然后显示下一张（没有就关掉浮层）——
+    // 不摘掉的话，翻回去还能看到一张已经不存在的图，点了是 404。
+    viewList.splice(viewAt, 1);
+    if(!viewList.length){ viewerClose(); return; }
+    if(viewAt >= viewList.length) viewAt = viewList.length - 1;
+    viewerShow();
+  };
+}
+
+/** 把一张产出图移进回收站。返回是否真的删掉了（取消 / 失败 -> false）。 */
+async function deleteImage(path){
+  const name = String(path).split(/[\\/]/).pop();
+  if(!confirm("把这张移进回收站？\n\n" + name
+      + "\n\n不是真删 —— 会放到产出目录的 _recycle 子目录里，"
+      + "想彻底清掉自己去删那个目录。")) return false;
+  try{
+    const r = await fetch("/api/delete", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path})}).then(r => r.json());
+    if(!r.ok) throw new Error(r.error);
+    setStatus("已移入回收站：" + name, "ok");
+    loadRecent();
+    return true;
+  }catch(e){
+    setStatus("删除失败：" + e.message, "err");
+    return false;
+  }
+}
+function viewerStep(d){
+  if(!viewList.length) return;
+  // 到头就停在原地，不绕圈 —— 绕圈会让人以为自己没在翻
+  viewAt = Math.max(0, Math.min(viewAt + d, viewList.length - 1));
+  viewerShow();
+}
+function viewerClose(){ $("viewModal").classList.remove("on"); }
+
+$("viewPrev").onclick = () => viewerStep(-1);
+$("viewNext").onclick = () => viewerStep(1);
+$("viewClose").onclick = viewerClose;
+$("viewModal").addEventListener("click", ev => {
+  if(ev.target === $("viewModal")) viewerClose();
+});
+// 「原图」：仍要能另开标签页看 100% —— 这是原来 window.open 唯一不可替代的地方
+$("viewRaw").onclick = () => {
+  const f = viewList[viewAt];
+  if(f) window.open("/api/image?path=" + encodeURIComponent(f.path), "_blank");
+};
+window.addEventListener("keydown", ev => {
+  if(!$("viewModal").classList.contains("on")) return;
+  // 浮层是模态的（铺满整屏，后面点不到），所以这里**不做**"焦点在输入框就放行"
+  // 的判断：打开浮层前留在提示词框里的焦点，会让左右键变成移动光标、看着像没反应。
+  // 浮层开着的时候，左右键就该翻页。
+  if(ev.key === "ArrowLeft"){ viewerStep(-1); ev.preventDefault(); }
+  else if(ev.key === "ArrowRight"){ viewerStep(1); ev.preventDefault(); }
+  else if(ev.key === "Escape"){ viewerClose(); ev.preventDefault(); }
+});
+
+
+/** 把一段触发词追加到正向提示词框（不自动注入，由用户决定用哪一组） */
+function appendToPrompt(text){
+  const box = $("promptCN");
+  if(!box) return;
+  const cur = (box.value || "").trim();
+  const add = String(text || "").trim();
+  if(!add) return;
+  // 去掉里面的 <lora:...> 语法，这个界面用不到
+  const cleanAdd = add.replace(/<lora:[^>]*>\s*,?\s*/gi, "").trim();
+  if(!cleanAdd) return;
+  const low = cur.toLowerCase();
+  const parts = cleanAdd.split(",").map(s => s.trim()).filter(Boolean);
+  const fresh = parts.filter(p => !low.includes(p.toLowerCase()));
+  if(!fresh.length) return;
+  box.value = (cur ? cur.replace(/,\s*$/, "") + ", " : "") + fresh.join(", ");
+}
+
+/** 从正向提示词框里移除一个标签（按逗号项精确匹配）。
+ *
+ *  为什么不用 includes()：那样 "blonde hair" 会被当成 "dark blonde hair" 的
+ *  一部分删掉。按逗号切分后整项比较才安全。
+ *  返回 true 表示确实删掉了。
+ */
+function removeFromPrompt(text){
+  const box = $("promptCN");
+  if(!box) return false;
+  const target = String(text || "").trim().toLowerCase();
+  if(!target) return false;
+  const parts = (box.value || "").split(",").map(s => s.trim()).filter(Boolean);
+  const kept = parts.filter(p => p.toLowerCase() !== target);
+  if(kept.length === parts.length) return false;   // 本来就没有
+  box.value = kept.join(", ");
+  return true;
+}
+
+async function uploadFile(file){
+  // ★ 这里原来少了这一行，直接用了未声明的 buf，
+  //   一调用就抛 ReferenceError: buf is not defined ——
+  //   源图上传、参考图上传、草图上传三条路全废（都是调这个函数）。
+  const buf = await file.arrayBuffer();
+  const b64 = bytesToBase64(new Uint8Array(buf));
+  const r = await fetch("/api/upload", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({data:b64, filename:file.name})}).then(r=>r.json());
+  if(!r.ok) throw new Error(r.error);
+  return r.name;
+}
+
+// clear the currently selected source / reference image
+function clearSource(){
+  if(sourceObjectURL) { URL.revokeObjectURL(sourceObjectURL); sourceObjectURL = null; }
+  sourceImage = null;
+  $("previewSource").removeAttribute("src");
+  $("wrapSource").style.display = "none";
+  $("dropSource").style.display = "";
+  setStatus("源图已清除");
+}
+
+function renderRefThumbs(){
+  const box = $("refThumbs");
+  box.innerHTML = "";
+  refThumbs.forEach((t, i) => {
+    const d = document.createElement("div");
+    d.className = "imgwrap";
+    d.style.margin = "0";
+    d.innerHTML = `<img src="${t.url}" style="width:76px;height:76px;object-fit:cover">
+                   <button class="clearbtn" title="移除这张">×</button>`;
+    d.querySelector("button").onclick = () => {
+      URL.revokeObjectURL(t.url);
+      refImages.splice(i, 1);
+      refThumbs.splice(i, 1);
+      renderRefThumbs();
+      setStatus("已移除一张参考图，剩 " + refImages.length + " 张");
+    };
+    box.appendChild(d);
+  });
+  $("refCount").textContent = refImages.length ? "已选 " + refImages.length + " 张" : "";
+  $("wrapRef").style.display = refImages.length ? "" : "none";
+  $("dropRefHint").textContent = refImages.length
+    ? "点击继续添加参考图" : "点击选择参考图，或拖到这里";
+}
+
+function clearRef(){
+  refThumbs.forEach(t => URL.revokeObjectURL(t.url));
+  refThumbs = []; refImages = [];
+  renderRefThumbs();
+  $("dropRef").style.display = "";
+  setStatus("参考图已清除");
+}
+
+// ---------- 构图迁移（深度图） ----------
+// 两步走：先把参考图传上去解析成深度图（用户能看见结果），再拿深度图当 ControlNet 输入。
+// 解析只做一次，之后每次出图都复用那张深度图，不用重跑 Depth Anything。
+$("depthFile").addEventListener("change", () => {
+  const f = $("depthFile").files[0];
+  if(!f) return;
+  $("depthName").textContent = f.name;
+  // 选完立刻显示原图缩略图 —— 不然过一会儿就忘了放过哪张。
+  if(depthSrcURL) URL.revokeObjectURL(depthSrcURL);
+  depthSrcURL = URL.createObjectURL(f);
+  $("depthSrcThumb").src = depthSrcURL;
+  $("depthWrap").style.display = "flex";
+  // 换了图，之前的深度图作废
+  depthSrc = null; depthMap = null;
+  $("depthOutBox").style.visibility = "hidden";
+  $("depthPreview").removeAttribute("src");
+  $("useDepth").checked = false;
+});
+
+async function analyzeDepth(){
+  const f = $("depthFile").files[0];
+  if(!f){ setStatus("先点「选择图片」挑一张参考图", "err"); return; }
+  try{
+    setStatus("上传参考图…");
+    depthSrc = await uploadFile(f);
+    setStatus("解析构图（Depth Anything 3）…");
+    const r = await fetch("/api/depth", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({image: depthSrc})
+    }).then(r => r.json());
+    if(!r.ok) throw new Error(r.error);
+    depthMap = r.name;
+    $("depthPreview").src = "/api/image?path=" + encodeURIComponent(r.path) + "&t=" + Date.now();
+    $("depthOutBox").style.visibility = "visible";
+    $("depthWrap").style.display = "flex";
+    $("useDepth").checked = true;
+    setStatus("深度图已生成，出图时会按它摆前后景", "ok");
+  }catch(e){
+    depthMap = null;
+    setStatus("解析构图失败：" + e.message, "err");
+  }
+}
+
+function clearDepth(){
+  depthSrc = null; depthMap = null;
+  if(depthSrcURL){ URL.revokeObjectURL(depthSrcURL); depthSrcURL = null; }
+  $("depthFile").value = "";
+  $("depthName").textContent = "";
+  $("depthSrcThumb").removeAttribute("src");
+  $("depthPreview").removeAttribute("src");
+  $("depthWrap").style.display = "none";
+  $("useDepth").checked = false;
+  setStatus("构图迁移已清除");
+}
+
+// ---------- 从成品图读回参数 ----------
+// 为什么这里不需要反推模型（WD14 那类）：ComfyUI 的 SaveImage 会把整份 API
+// 工作流原样写进 PNG 的 tEXt 块，参数本来就存在文件里。后端只做解析，
+// 不做任何推测 —— 所以读回来的东西是精确的，不是"看着像"。
+let metaRead = null;
+
+function metaRows(m){
+  const rows = [];
+  const add = (k, v) => { if(v !== "" && v !== null && v !== undefined) rows.push([k, String(v)]); };
+  add("来源", m.kind === "comfy" ? "ComfyUI 工作流（原样读回）"
+                                : "A1111 / Forge 参数块（文本解析）");
+  if(m.checkpoint) add("底模", m.checkpoint);
+  if(m.loras && m.loras.length){
+    add("LoRA", m.loras.map(l => (l.name || "?") + "（权重 " + (l.model ?? "?") + "）").join("、"));
+  }
+  const s = m.sampler || {};
+  const sp = [];
+  if(s.steps) sp.push("步数 " + s.steps);
+  if(s.cfg) sp.push("CFG " + s.cfg);
+  if(s.sampler_name) sp.push(s.sampler_name + (s.scheduler ? " / " + s.scheduler : ""));
+  if(s.seed !== null && s.seed !== undefined) sp.push("seed " + s.seed);
+  if(s.denoise !== null && s.denoise !== undefined && s.denoise !== 1)
+    sp.push("重绘幅度 " + s.denoise);
+  add("采样", sp.join("，"));
+  if(m.size && m.size[0])
+    add("尺寸", m.size[0] + "×" + m.size[1] + (m.batch > 1 ? "，一次 " + m.batch + " 张" : ""));
+  if(m.controlnet && m.controlnet.length){
+    add("ControlNet", m.controlnet.map(c => (c.type || "未标类型") + " 强度 " + c.strength
+      + "（" + c.start + "–" + c.end + "）").join("；"));
+  }
+  return rows;
+}
+
+function renderMeta(m){
+  const box = $("metaOut");
+  box.innerHTML = "";
+  const tbl = document.createElement("div");
+  tbl.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:4px 10px;"
+                    + "font-size:12px;line-height:1.5";
+  const cell = (text, color) => {
+    const d = document.createElement("div");
+    d.textContent = text;
+    d.style.wordBreak = "break-all";
+    if(color) d.style.color = color;
+    return d;
+  };
+  metaRows(m).forEach(([k, v]) => {
+    tbl.appendChild(cell(k, "var(--dim)"));
+    tbl.appendChild(cell(v));
+  });
+  if(m.positive) { tbl.appendChild(cell("正向词", "var(--dim)")); tbl.appendChild(cell(m.positive, "#cfe3ff")); }
+  if(m.negative) { tbl.appendChild(cell("负向词", "var(--dim)")); tbl.appendChild(cell(m.negative, "#9fb0c8")); }
+  box.appendChild(tbl);
+
+  const bar = document.createElement("div");
+  bar.style.cssText = "margin-top:8px;display:flex;gap:6px;flex-wrap:wrap";
+  const mk = (label, fn) => {
+    const b = document.createElement("button");
+    b.className = "ghost"; b.textContent = label; b.onclick = fn;
+    bar.appendChild(b);
+  };
+  mk("套用采样参数", applyMetaSampler);
+  if(m.negative) mk("填入负向词", applyMetaNegative);
+  if(m.loras && m.loras.length) mk("套用 LoRA", applyMetaLoras);
+  mk("关闭", clearMeta);
+  box.appendChild(bar);
+
+  (m.notes || []).forEach(n => {
+    const d = document.createElement("div");
+    d.className = "phint";
+    d.style.marginTop = "6px";
+    d.textContent = n;
+    box.appendChild(d);
+  });
+  box.style.display = "";
+}
+
+// 本应用会自动往正向词最前面塞勾选的质量词。读回来的正向词里已经含了它们，
+// 原样填进去就会重复一遍 —— 所以把**开头连续**的质量词摘出来改成勾选状态。
+// 只动开头：用户自己写在中间的 masterpiece 不是自动加的，不能碰。
+function stripMetaQuality(text){
+  const parts = String(text || "").split(",").map(s => s.trim()).filter(Boolean);
+  const hits = [];
+  while(parts.length){
+    const q = QUALITY_TAGS.find(x => x.tag.toLowerCase() === parts[0].toLowerCase());
+    if(!q) break;
+    q.on = true; hits.push(q.tag); parts.shift();
+  }
+  if(hits.length) renderQualityChips();
+  return { text: parts.join(", "), stripped: hits };
+}
+
+function applyMetaPrompt(){
+  if(!metaRead || !metaRead.positive) return 0;
+  if(($("promptCN").value || "").trim()
+     && !confirm("提示词框里已经有内容，用读回来的替换掉？")) return -1;
+  const r = stripMetaQuality(metaRead.positive);
+  $("promptCN").value = r.text;
+  $("promptCN").dispatchEvent(new Event("input"));   // 让翻译预览跟着刷新
+  return r.stripped.length;
+}
+
+function applyMetaNegative(){
+  if(!metaRead || !metaRead.negative) return;
+  $("negative").value = metaRead.negative;
+  $("negBox").open = true;
+  setStatus("负向词已填入。下面是「预设那档」再追加它 —— 想只用读回来的，"
+            + "把「负向词排除强度」改成「不使用」", "ok");
+}
+
+// 精简列表里没有这个值时补一条，而不是悄悄不套用 ——
+// 静默失败会让人以为参数套上了，实际还在用默认值。
+//
+// ★ allowed 是**这台 ComfyUI 真正支持的取值**。comfy 自己的下拉框受 min/max 约束
+//   不会出问题，但这里能被图里的任意字符串顶掉：A1111 的 "DPM++ 2M Karras"
+//   直接写进工作流会被 ComfyUI 拒掉（实测报错 sampler_name: Value not in list）。
+//   所以不在 allowed 里的**一律不选**，由调用方告诉用户，绝不硬塞一个相近的。
+function setMetaOption(el, value, allowed){
+  if(value === null || value === undefined || value === "") return false;
+  const v = String(value);
+  const known = Array.from(el.options).some(o => o.value === v);
+  if(!known && allowed && allowed.length && !allowed.includes(v)) return false;
+  if(!known){
+    const o = document.createElement("option");
+    o.value = v; o.textContent = v + "（从图里读回，不在精简列表）";
+    el.appendChild(o);
+  }
+  el.value = v;
+  return true;
+}
+
+function fireInput(el){ el.dispatchEvent(new Event("input")); }
+
+function applyMetaSampler(){
+  if(!metaRead) return;
+  const s = metaRead.sampler || {}, done = [], skip = [];
+  const w = metaRead.size && metaRead.size[0], h = metaRead.size && metaRead.size[1];
+  if(w && h && setMetaOption($("width"), w) && setMetaOption($("height"), h)){
+    const p = SIZE_PRESETS.find(x => x.w === w && x.h === h);
+    $("sizePreset").value = p ? p.v : "custom";
+    $("sizeCustom").style.display = p ? "none" : "";
+    done.push("尺寸 " + w + "×" + h);
+  }
+  if(s.steps){ $("steps").value = String(s.steps); fireInput($("steps")); done.push("步数 " + s.steps); }
+  if(s.cfg){ $("cfg").value = String(s.cfg); fireInput($("cfg")); done.push("CFG " + s.cfg); }
+  if(s.seed !== null && s.seed !== undefined){ $("seed").value = String(s.seed); done.push("seed " + s.seed); }
+  const samplers = (caps && caps.samplers) || [];
+  const schedulers = (caps && caps.schedulers) || [];
+  if(s.sampler_name){
+    if(setMetaOption($("sampler"), s.sampler_name, samplers)) done.push("采样器 " + s.sampler_name);
+    else skip.push("采样器 " + s.sampler_name + "（这台 ComfyUI 没有，没套用）");
+  } else if(s.sampler_name_raw){
+    // 图里有采样器，但它在 ComfyUI 里没有对应项（A1111 的名字就是这样）。
+    // 不啃声会让人以为套上了。
+    skip.push("采样器 " + s.sampler_name_raw + "（ComfyUI 里没有对应项，没套用）");
+  }
+  if(s.scheduler){
+    if(setMetaOption($("scheduler"), s.scheduler, schedulers)) done.push("调度器 " + s.scheduler);
+    else skip.push("调度器 " + s.scheduler + "（这台 ComfyUI 没有，没套用）");
+  } else if(s.scheduler_raw && s.scheduler_raw !== "automatic"){
+    skip.push("调度器 " + s.scheduler_raw + "（ComfyUI 里没有对应项，没套用）");
+  }
+  let extra = "";
+  if(s.denoise !== null && s.denoise !== undefined && s.denoise !== 1){
+    $("denoise").value = String(s.denoise); fireInput($("denoise"));
+    done.push("重绘幅度 " + s.denoise);
+    if(typeof mode !== "undefined" && mode !== "img2img")
+      extra = "（重绘幅度只在图生图下生效，当前是文生图）";
+  }
+  if(metaRead.batch > 1 && setMetaOption($("count"), metaRead.batch))
+    done.push("一次 " + metaRead.batch + " 张");
+  const tail = skip.length ? "；未套用：" + skip.join("、") : "";
+  if(!done.length){ setStatus("没有可套用的参数。" + skip.join("、"), "err"); return; }
+  setStatus("已套用：" + done.join("、") + extra + tail, skip.length ? "err" : "ok");
+}
+
+function applyMetaLoras(){
+  if(!metaRead || !(metaRead.loras || []).length) return;
+  const all = (caps && caps.loras) || [];
+  const base = n => String(n).split(/[\\/]/).pop().toLowerCase();
+  const missing = [], done = [];
+  loraItems = [];
+  metaRead.loras.forEach(l => {
+    const hit = all.find(x => x === l.name) || all.find(x => base(x) === base(l.name));
+    if(!hit){ missing.push(l.name); return; }
+    const strength = typeof l.model === "number"
+      ? l.model : loraDefaultStrength(loraKindOf(hit, loraMeta));
+    loraItems.push({ id: ++loraSeq, name: hit, strength });
+    done.push(base(hit) + " " + strength);
+  });
+  renderLoraGroups();
+  if(done.length) setStatus("已套用 LoRA：" + done.join("、")
+    + (missing.length ? "；本机没有：" + missing.join("、") : ""), "ok");
+  else setStatus("图里的 LoRA 本机一个都没有：" + missing.join("、"), "err");
+}
+
+async function readMeta(file){
+  const msg = $("metaMsg");
+  msg.style.color = "var(--dim)";
+  msg.textContent = "读取中…";
+  try{
+    const buf = await file.arrayBuffer();
+    const r = await fetch("/api/read_meta", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({data: bytesToBase64(new Uint8Array(buf)),
+                            filename: file.name})
+    }).then(r => r.json());
+    if(!r.ok) throw new Error(r.error);
+    metaRead = r;
+    renderMeta(r);
+    const n = applyMetaPrompt();
+    if(n < 0){
+      msg.style.color = "#e0a95f";
+      msg.textContent = "已读取（" + file.name + "），提示词框保持原样 —— 你取消了替换";
+      return;
+    }
+    msg.style.color = "#63b56a";
+    msg.textContent = "已读取：" + file.name + "，正向提示词已填好"
+      + (n ? "（顺带勾上了 " + n + " 个质量词，免得和自动加的那份重复）" : "");
+    setStatus("参数已读回，正向提示词已填好", "ok");
+  }catch(e){
+    metaRead = null;
+    $("metaOut").style.display = "none";
+    msg.style.color = "#e0685f";
+    msg.textContent = e.message;
+    setStatus("读取失败：" + e.message, "err");
+  }
+}
+
+function clearMeta(){
+  metaRead = null;
+  $("metaOut").style.display = "none";
+  $("metaOut").innerHTML = "";
+  $("metaMsg").textContent = "";
+}
+
+wireDrop("dropMeta", readMeta);
+
+wireDrop("dropSource", async f => {
+  try{
+    setStatus("上传源图…");
+    sourceImage = await uploadFile(f);
+    if(sourceObjectURL) URL.revokeObjectURL(sourceObjectURL);
+    sourceObjectURL = URL.createObjectURL(f);
+    $("previewSource").src = sourceObjectURL;
+    $("wrapSource").style.display = "";
+    $("dropSource").style.display = "none";
+    setStatus("源图已就绪", "ok");
+  }catch(e){ setStatus("源图上传失败：" + e.message, "err"); }
+});
+
+async function addRefFile(f){
+  try{
+    setStatus("上传参考图…");
+    const name = await uploadFile(f);
+    refImages.push(name);
+    refThumbs.push({ name, url: URL.createObjectURL(f) });
+    renderRefThumbs();
+    // keep the drop zone visible so more images can be added
+    $("dropRef").style.display = "";
+    setStatus("参考图已就绪，共 " + refImages.length + " 张", "ok");
+  }catch(e){ setStatus("参考图上传失败：" + e.message, "err"); }
+}
+wireDrop("dropRef", addRefFile);
+
+// ---------- 画板 ----------
+const pad = $("pad"), ctx = pad.getContext("2d");
+function resetPad(){
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,pad.width,pad.height);
+  ctx.lineWidth = 6; ctx.lineCap = "round"; ctx.lineJoin = "round";
+}
+resetPad();
+let drawing = false;
+const pos = e => {
+  const r = pad.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  return [cx * pad.width / r.width, cy * pad.height / r.height];
+};
+const start = e => { drawing = true; ctx.strokeStyle = $("penColor").value;
+  ctx.beginPath(); ctx.moveTo(...pos(e)); e.preventDefault(); };
+const move = e => { if(!drawing) return; ctx.lineTo(...pos(e)); ctx.stroke(); e.preventDefault(); };
+const stop = () => drawing = false;
+pad.addEventListener("mousedown", start); pad.addEventListener("mousemove", move);
+window.addEventListener("mouseup", stop);
+pad.addEventListener("touchstart", start, {passive:false});
+pad.addEventListener("touchmove", move, {passive:false});
+pad.addEventListener("touchend", stop);
+function clearPad(){ resetPad(); }
+function downloadPad(){
+  const a = document.createElement("a");
+  a.download = "sketch.png"; a.href = pad.toDataURL("image/png"); a.click();
+}
+$("padFile").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image();
+  img.onload = () => {
+    resetPad();
+    ctx.drawImage(img, 0, 0, pad.width, pad.height);
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(f);
+  e.target.value = "";
+};
+function padIsBlank(){
+  const d = ctx.getImageData(0,0,pad.width,pad.height).data;
+  for(let i=0;i<d.length;i+=16) if(d[i] < 250) return false;
+  return true;
+}
+
+// ---------- 状态 ----------
+function setStatus(msg, cls){
+  const s = $("status");
+  s.textContent = msg;
+  s.className = "status" + (cls ? " " + cls : "");
+}
+
+/** Render a list of output file paths into the 生成结果 panel. */
+function showFiles(files){
+  const th = $("thumbs");
+  if(!th) return;
+  th.innerHTML = "";
+  const vlist = viewListFromPaths(files);
+  vlist.forEach((f, i) => {
+    const img = document.createElement("img");
+    img.src = "/api/image?path=" + encodeURIComponent(f.path);
+    img.title = f.path + "\n（点击看图，← → 翻页）";
+    img.onclick = () => viewerOpen(vlist, i);
+    th.appendChild(img);
+  });
+}
+
+// ---------- 生成 ----------
+$("btnGen").onclick = async () => {
+  if(!$("promptCN").value.trim()){
+    setStatus("请先写中文提示词", "err"); return;
+  }
+  if(mode === "img2img" && !sourceImage){
+    setStatus("图生图需要先选一张源图", "err"); return;
+  }
+  // 提交前最后一道闸：采样器/调度器必须是**这台 ComfyUI 真的支持**的值。
+  // 这两个下拉框现在可以被"从成品图读回参数"塞进任意字符串，而 comfy 那边
+  // 只回一句 "sampler_name: Value not in list" —— 与其让它跑到那边再失败，
+  // 不如在这里说清楚是哪个值、可选什么。
+  const _checkSel = (id, list, what) => {
+    const v = $(id).value;
+    if(!list || !list.length || list.includes(v)) return null;
+    return what + "「" + v + "」不是这台 ComfyUI 支持的。可选："
+         + list.slice(0, 8).join(", ") + " …";
+  };
+  const _cap = caps || {};
+  const _bad = _checkSel("sampler", _cap.samplers, "采样器")
+            || _checkSel("scheduler", _cap.schedulers, "调度器");
+  if(_bad){ setStatus(_bad, "err"); return; }
+  const loras = loraItems.map(it => {
+    const m = (loraMeta && loraMeta[it.name]) || {};
+    const td = m.trigger_detail || {};
+    return {
+      name: it.name,
+      strength: Number(it.strength),
+      // Only triggers the server judged trustworthy are auto-applied; a LoRA
+      // whose metadata is sample-image captions contributes none.
+      triggers: []
+    };
+  }).filter(x => x.name);
+
+  let sketchImage = null;
+  if($("useSketch").checked){
+    if(!caps || !caps.sketch){ setStatus("草图功能不可用（缺模型）", "err"); return; }
+    if(padIsBlank()){ setStatus("画板是空的，先画点东西或取消勾选草图", "err"); return; }
+    try{ sketchImage = await uploadFile(dataURLtoFile(pad.toDataURL("image/png"), "sketch.png")); }
+    catch(e){ setStatus("草图上传递失败：" + e.message, "err"); return; }
+  }
+
+  const body = {
+    mode,
+    // 底模：列表来自 /api/capabilities（ComfyUI 里装了哪些就列哪些）。
+    // 选中哪个就用哪个 —— 参数不跟着变，滑杆留给你自己调。
+    checkpoint: $("checkpoint").value || null,
+    prompt_cn: $("promptCN").value,
+    negative: composedNegative(),
+    quality: selectedQuality(),
+    width: parseInt($("width").value),
+    height: parseInt($("height").value),
+    count: parseInt($("count").value),
+    steps: parseInt($("steps").value),
+    cfg: parseFloat($("cfg").value),
+    clip_skip: parseInt($("clipSkip").value),
+    // denoise is an img2img-only control and its slider sits at 0.55, which is
+    // hidden in 文生图 but was still being sent - so every txt2img run asked the
+    // sampler to keep 45% of the initial noise, producing a translucent grey
+    // image. Force 1.0 outside img2img.
+    denoise: (mode === "img2img") ? parseFloat($("denoise").value) : 1.0,
+    sampler: $("sampler").value,
+    scheduler: $("scheduler").value,
+    loras,
+    source_image: mode === "img2img" ? sourceImage : null,
+    sketch_image: sketchImage,
+    use_sketch: !!sketchImage,
+    controlnet: $("controlnet").value || null,
+    sketch_strength: parseFloat($("sketchStrength").value),
+    ref_images: ($("useRef").checked && refImages.length) ? refImages.slice() : null,
+    use_reference: $("useRef").checked && refImages.length > 0,
+    // 构图迁移：深度图必须在 ComfyUI input 里（analyzeDepth 已经放好了）。
+    // 没解析成功就传 null，后端会整段跳过，不会去加载 union 模型。
+    depth_image: ($("useDepth").checked && depthMap) ? depthMap : null,
+    use_depth: !!($("useDepth").checked && depthMap),
+    depth_strength: parseFloat($("depthStrength").value),
+    depth_start: 0.0,
+    depth_end: 0.8,
+    ref_strength: parseFloat($("refStrength").value),
+    ref_weight_type: $("refWeightType").value,
+    ref_combine: $("refCombine").value
+  };
+  const sv = $("seed").value.trim();
+  if(sv){
+    // 必须校验：填了非数字（比如手滑打进去的 abc）时，parseInt 得到 NaN，
+    // 而 JSON.stringify(NaN) 会变成 null，后端 int(None) 直接 500，
+    // 生成失败且提示是 "TypeError: int() argument must be..." 这种看不懂的话。
+    const n = Number(sv);
+    if(!Number.isFinite(n) || n < 0 || n > 4294967295){
+      setStatus("种子要填 0 – 4294967295 之间的整数，留空则随机", "err");
+      return;
+    }
+    body.seed = Math.floor(n);
+  }
+
+  $("btnGen").disabled = true;
+  setStatus("生成中…（首次加载模型会慢一些）");
+  try{
+    const r = await fetch("/api/generate", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)}).then(r=>r.json());
+    if(!r.ok){ setStatus("失败：" + r.error, "err"); return; }
+    $("lastEnglish").textContent = r.english;
+    let extra = "";
+    if(r.trigger_words && r.trigger_words.length)
+      extra = "（LoRA 触发词 " + r.trigger_words.join(", ") + " 已自动加入）";
+    showFiles(r.files);
+    let msg = "完成，共 " + r.files.length + " 张（seed " + r.seed + "）" + extra;
+    if(r.unknown && r.unknown.length) msg += "；未收录：" + r.unknown.join(" ");
+    setStatus(msg, "ok");
+    loadRecent();
+  }catch(e){
+    setStatus("失败：" + e.message, "err");
+  }finally{
+    $("btnGen").disabled = false;
+  }
+};
+
+function dataURLtoFile(dataURL, name){
+  const [meta, b64] = dataURL.split(",");
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return new File([arr], name, {type:"image/png"});
+}
+
+$("btnFolder").onclick = () => {
+  fetch("/api/reveal", {method:"POST"}).catch(()=>{});
+};
+
+// ---------- 手动放大 ----------
+function upStatus(msg, cls){
+  const s = $("upStatus");
+  s.textContent = msg || "";
+  s.className = "status" + (cls ? " " + cls : "");
+}
+
+async function upscale(path, btn){
+  const factor = parseFloat($("upFactor").value) || 2;
+  if(btn){ btn.disabled = true; btn.textContent = "放大中…"; }
+  upStatus("放大中…（2× 约 30 秒）");
+  try{
+    const r = await fetch("/api/upscale", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path, factor})}).then(r=>r.json());
+    if(!r.ok){ upStatus("放大失败：" + r.error, "err"); return; }
+    upStatus("已放大 " + r.from[0] + "×" + r.from[1] + " → " + r.to[0] + "×" + r.to[1], "ok");
+    // show the upscaled result in the main result area
+    const th = $("thumbs");
+    th.innerHTML = "";
+    const vlist = viewListFromPaths(r.files);
+    vlist.forEach((f, i) => {
+      const img = document.createElement("img");
+      img.src = "/api/image?path=" + encodeURIComponent(f.path);
+      img.title = f.path + "\n（点击看图，← → 翻页）";
+      img.onclick = () => viewerOpen(vlist, i);
+      th.appendChild(img);
+    });
+    loadRecent();
+  }catch(e){
+    upStatus("放大失败：" + e.message, "err");
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = "放大"; }
+  }
+}
+
+async function loadRecent(){
+  try{
+    const r = await fetch("/api/recent?limit=400").then(r=>r.json());
+    const box = $("recent");
+    if(!box) return;
+    if(!r.ok){
+      box.innerHTML = '<span class="hint">读取失败：' + (r.error||"") + '</span>';
+      return;
+    }
+    if(!r.files.length){
+      box.innerHTML = '<span class="hint">还没有图片</span>';
+      return;
+    }
+
+    // 按日期分组：文件名形如 ui_20260915_154604_.../inp_.../up_...
+    // 取不到就退回用修改时间。这样能按天折叠，老图也翻得到。
+    const groups = new Map();
+    r.files.forEach(f => {
+      const m = String(f.name).match(/^(?:ui|inp|up)_(\d{4})(\d{2})(\d{2})_/);
+      let day;
+      if(m){
+        day = m[1] + "-" + m[2] + "-" + m[3];
+      }else{
+        const d = new Date((f.mtime || 0) * 1000);
+        day = d.getFullYear() + "-"
+            + String(d.getMonth()+1).padStart(2,"0") + "-"
+            + String(d.getDate()).padStart(2,"0");
+      }
+      if(!groups.has(day)) groups.set(day, []);
+      groups.get(day).push(f);
+    });
+
+    const days = [...groups.keys()].sort().reverse();   // 新日期在前
+    // 看图翻页用的扁平顺序，和屏幕上的顺序一致：新日期在前，同一天按列表原序。
+    const flat = days.flatMap(d => groups.get(d));
+    box.innerHTML = "";
+    box.style.display = "block";                        // 不再用网格铺整屏
+
+    days.forEach((day, di) => {
+      const list = groups.get(day);
+      const det = document.createElement("details");
+      det.className = "dayGroup";
+      det.open = (di === 0);                            // 默认只展开最新一天
+      det.innerHTML = '<summary><b>' + day + '</b>'
+        + '<span class="dcount">' + list.length + ' 张</span></summary>';
+
+      const grid = document.createElement("div");
+      grid.className = "thumbs";
+      list.forEach(f => {
+        const cell = document.createElement("div");
+        cell.className = "shot";
+        const tm = new Date((f.mtime||0)*1000);
+        const hhmm = String(tm.getHours()).padStart(2,"0") + ":"
+                   + String(tm.getMinutes()).padStart(2,"0");
+        cell.innerHTML =
+          '<div class="pic">'
+          +   '<img src="/api/image?path=' + encodeURIComponent(f.path) + '"'
+          +   ' title="' + f.name + '"'
+          +   ' loading="lazy">'
+          +   '<span class="meta">' + hhmm + '</span>'
+          + '</div>'
+          + '<div class="row">'
+          +   '<button class="ghost act-up">放大</button>'
+          +   '<button class="ghost act-fix">修图</button>'
+          +   (f.prev ? '<button class="ghost act-cmp">对比</button>' : '')
+          +   '<button class="ghost act-del" title="移入回收站">删</button>'
+          + '</div>';
+        const img = cell.querySelector("img");
+        // 点图 = 站内看图，← → 可以顺着整份列表翻（包含其他日期）。
+        // 以前是 window.open 另开标签页，或者"有原图就直接跳对比" ——
+        // 后者让"只想看看这张"变成必须先进对比浮层，所以改成看图里给对比按钮。
+        img.onclick = () => viewerOpen(flat, flat.indexOf(f));
+        cell.querySelector(".act-up").onclick = e => {
+          e.stopPropagation(); upscale(f.path, cell.querySelector('.act-up'));
+        };
+        cell.querySelector(".act-fix").onclick = e => {
+          e.stopPropagation(); openMaskEditor(f.path);
+        };
+        cell.querySelector(".act-del").onclick = e => {
+          e.stopPropagation(); deleteImage(f.path);
+        };
+        const c = cell.querySelector(".act-cmp");
+        if(c) c.onclick = e => { e.stopPropagation(); openCompare(f.path, f.prev); };
+        grid.appendChild(cell);
+      });
+      det.appendChild(grid);
+      box.appendChild(det);
+    });
+  }catch(e){
+    const box = $("recent");
+    if(box) box.innerHTML = '<span class="hint">读取失败：' + (e.message||e) + '</span>';
+  }
+}
+
+
+// ---------- 提示词拼装（小插件）----------
+// 只做一件事：把选中的中文选项拼成英文标签填进提示词框。
+// 不参与生成流程，出错也不影响出图。
+let pbData = [];              // /api/prompt_builder 返回的分组选项
+const pbSelected = new Set(); // 已选中的英文标签
+
+async function pbLoad(){
+  try{
+    const r = await fetch("/api/prompt_builder").then(r=>r.json());
+    if(!r.ok) throw new Error(r.error || "读取失败");
+    pbData = r.data || [];
+    pbRender();
+  }catch(e){
+    const h = $("pbHint");
+    if(h) h.innerHTML = '<span style="color:#e0685f">拼装数据读取失败：'
+      + (e.message||e) + '（不影响出图）</span>';
+  }
+}
+
+function pbRender(){
+  const box = $("pbGroups");
+  if(!box) return;
+  box.innerHTML = "";
+  pbData.forEach((g, gi) => {
+    const row = document.createElement("div");
+    row.style.cssText = "margin-top:8px";
+    const lbl = document.createElement("div");
+    lbl.className = "phint";
+    lbl.style.margin = "0 0 4px";
+    lbl.textContent = g.group + "（" + (g.items||[]).length + "）";
+    row.appendChild(lbl);
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;flex-wrap:wrap;gap:4px";
+    (g.items || []).forEach(it => {
+      const b = document.createElement("button");
+      b.className = "ghost";
+      b.style.cssText = "padding:2px 8px;font-size:12px";
+      b.textContent = it.cn + (it.custom ? " ★" : "");
+      b.title = it.en + (it.custom ? "（自定义）" : "");
+      if(pbSelected.has(it.en)) b.style.borderColor = cssv("--ok");
+      b.onclick = () => {
+        if(pbSelected.has(it.en)){
+          pbSelected.delete(it.en);
+          // 同步把已填入的标签从提示词框里拿掉，否则换发色会新旧并存
+          const gone = removeFromPrompt(it.en);
+          pbFlash(b, gone ? "已移出提示词框" : "已取消选择");
+        } else {
+          pbSelected.add(it.en);
+          pbFlash(b, "已选中");
+        }
+        pbRefresh();
+      };
+      wrap.appendChild(b);
+    });
+    row.appendChild(wrap);
+    box.appendChild(row);
+  });
+  // 自定义项的分组下拉
+  const sel = $("pbNewGroup");
+  if(sel){
+    const cur = sel.value;
+    sel.innerHTML = "";
+    pbData.forEach(g => {
+      const o = document.createElement("option");
+      o.value = g.group; o.textContent = g.group;
+      sel.appendChild(o);
+    });
+    if(cur) sel.value = cur;
+  }
+  pbRefresh();
+}
+
+function pbAssemble(){
+  // 按分组顺序拼，保持可预期的排列
+  const out = [];
+  pbData.forEach(g => (g.items||[]).forEach(it => {
+    if(pbSelected.has(it.en)) out.push(it.en);
+  }));
+  return out;
+}
+
+function pbRefresh(){
+  // 按钮高亮同步
+  const box = $("pbGroups");
+  if(box){
+    let i = 0;
+    pbData.forEach(g => (g.items||[]).forEach(it => {
+      const btns = box.querySelectorAll("button");
+      if(btns[i]){
+        btns[i].style.borderColor = pbSelected.has(it.en) ? cssv("--ok") : "";
+        btns[i].style.color = pbSelected.has(it.en) ? cssv("--ok") : "";
+      }
+      i++;
+    }));
+  }
+  const list = pbAssemble();
+  const c = $("pbCount"); if(c) c.textContent = "已选 " + list.length + " 项";
+  const p = $("pbPreview");
+  if(p) p.textContent = list.length ? "拼出：" + list.join(", ") : "";
+}
+
+/** 按钮点击反馈：短暂变色 + 缩放，让用户确认操作生效。 */
+function pbFlash(btn, tip){
+  if(!btn) return;
+  btn.classList.remove("pbFlash");
+  void btn.offsetWidth;              // 强制重排，保证同一按钮连点也能重放动画
+  btn.classList.add("pbFlash");
+  setTimeout(() => btn.classList.remove("pbFlash"), 420);
+  const h = $("pbHint");
+  if(h && tip){
+    h.textContent = tip;
+    clearTimeout(pbFlash._t);
+    pbFlash._t = setTimeout(() => {
+      h.textContent = "按维度点选，下方会拼出英文标签，点「填入提示词框」再用。"
+        + "这里只是拼装助手，不影响其他设置";
+    }, 1800);
+  }
+}
+
+function pbFill(){
+  const list = pbAssemble();
+  const btn = $("pbFill");
+  if(!list.length){
+    pbFlash(btn, "还没选任何选项");
+    return;
+  }
+  const box = $("promptCN");
+  const before = (box.value || "");
+  appendToPrompt(list.join(", "));
+  const added = (box.value || "") !== before;
+  pbFlash(btn, added ? ("已填入 " + list.length + " 个标签")
+                     : "这些标签已经在提示词框里了");
+}
+
+/** 清空选择时，把面板选过的标签一并从提示词框移除，避免残留。 */
+function pbClearAll(){
+  const list = pbAssemble();
+  let n = 0;
+  list.forEach(en => { if(removeFromPrompt(en)) n++; });
+  pbSelected.clear();
+  pbRender();
+  pbFlash($("pbClear"), n ? ("已移出 " + n + " 个") : "已清空选择");
+}
+
+// 随机：模拟原版的 Random 与 randomizePoseExpressionAndGenerate。
+// 「随机一组」= 每个分组各抽 0~1 项（含 30% 概率不抽），避免堆满
+// 「随机姿势+表情」= 只换姿势和表情两组，其余保留
+const PB_RANDOM_GROUPS = ["姿势 / 动作", "表情"];
+
+function pbPickRandom(){
+  pbSelected.clear();
+  pbData.forEach(g => {
+    if(g.group === "性器细节" && Math.random() < 0.7) return;  // 默认少抽这类
+    const items = g.items || [];
+    if(!items.length) return;
+    if(Math.random() < 0.3) return;                 // 三成概率跳过该组
+    const n = Math.min(items.length, 1 + Math.floor(Math.random() * 2));
+    const pool = items.slice();
+    for(let i = 0; i < n; i++){
+      const k = Math.floor(Math.random() * pool.length);
+      pbSelected.add(pool.splice(k, 1)[0].en);
+    }
+  });
+  pbRender();
+}
+
+function pbPickRandomPoseExpression(){
+  pbData.forEach(g => {
+    if(!PB_RANDOM_GROUPS.includes(g.group)) return;
+    (g.items || []).forEach(it => pbSelected.delete(it.en));
+    const items = g.items || [];
+    if(!items.length) return;
+    const pick = items[Math.floor(Math.random() * items.length)];
+    pbSelected.add(pick.en);
+  });
+  pbRender();
+}
+
+function pbBind(){
+  const f = $("pbFill"), c = $("pbClear"), a = $("pbAddBtn");
+  const r1 = $("pbRandom"), r2 = $("pbRandomPE");
+  if(f) f.onclick = pbFill;
+  if(c) c.onclick = pbClearAll;
+  if(r1) r1.onclick = () => { pbPickRandom(); pbFlash(r1, "已随机一组（" + pbSelected.size + " 项）"); };
+  if(r2) r2.onclick = () => { pbPickRandomPoseExpression(); pbFlash(r2, "已随机姿势与表情"); };
+  if(a) a.onclick = async () => {
+    const g = $("pbNewGroup").value;
+    const cn = ($("pbNewCn").value || "").trim();
+    const en = ($("pbNewEn").value || "").trim();
+    const msg = $("pbAddMsg");
+    if(!en){ msg.textContent = "英文标签必填"; return; }
+    try{
+      const r = await fetch("/api/prompt_builder", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({group:g, cn:cn, en:en})
+      }).then(r=>r.json());
+      if(!r.ok) throw new Error(r.error || "保存失败");
+      msg.textContent = r.note || ("已添加：" + (cn||en));
+      $("pbNewCn").value = ""; $("pbNewEn").value = "";
+      await pbLoad();
+    }catch(e){
+      msg.textContent = "保存失败：" + (e.message||e);
+    }
+  };
+}
+
+// 面板内容只在第一次展开时加载，避免拖慢启动
+(function(){
+  const d = $("pbBox");
+  if(!d) return;
+  d.addEventListener("toggle", () => {
+    if(d.open && !pbData.length){ pbLoad().then(pbBind); }
+  });
+  pbBind();
+})();
+
+
+// ---------- 自定义负向词 ----------
+// 只有一个框：主界面「负向提示词」折叠面板里的 #negative。
+// 参数面板里曾有一个重复的 #negExtra，两个框写同一个值容易混淆，已移除。
+(function negReset(){
+  const r = $("negResetBtn"), a = $("negative");
+  if(r && a) r.onclick = () => { a.value = ""; };
+})();
+
+
+// 页面启动：检测环境能力（模型/LoRA/节点），状态区靠这个填充。
+// 删掉它会让所有状态永远停在「检测中…」。
+loadCaps();
+</script>
+</body>
+</html>

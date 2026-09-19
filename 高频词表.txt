@@ -1,0 +1,3466 @@
+====== ComfyUI 二次元出图 · 高频词表 ======
+
+适用底模：Illustrious-XL（本机已装）
+词表来源：本地数据库 328,023 条 + 内置整理词库 + 人工补充映射
+验证状态：全部词条逐条程序化实测，100% 可翻译（0 失败）
+
+用法
+    在 UI 的提示词框里写中文，用逗号或空格分隔，程序自动转英文标签。
+    例如输入「少女 半身 微笑 银发红眼」
+    → 1girl, upper body, smile, silver hair, red eyes
+    中英混写也支持，右边的英文标签同样可以直接写。
+
+三条规则
+    1. 重要的标签放前面（越靠前权重越高）
+    2. 标签数量**分两种情况，别一刀切**（2026-09-17 修正）：
+       · 照着已有的图还原（复刻构图 / 角色 / 氛围）→ **越完整越好**，
+         40 个也不嫌多。这种场景下每个标签都是"这张图里确实有的东西"，
+         它们互相印证、把画面收得更紧，不是互相稀释。
+         用户实测：同一张图按完整版写 48 个标签，还原度和细节
+         明显好于精简到 15 个。
+       · 凭想象从零创作 → 8–15 个更稳。这时候多写的每一个标签都是
+         你没验证过的猜测，堆多了容易互相打架、或引入不想要的细节。
+       · 依据：SDXL 超 77 token 是**分块不是截断**（见后面「token 预算」一节），
+         所以"装不下"从来不是限制；限制来自"标签准不准"。
+    3. 看到「未收录」就换个说法，那部分不会进入模型
+
+怎么找词
+    一         构图与取景（人数、取景范围、局部特写、裁切出框、视角与角度、
+               透视与镜头、景深虚化、构图手法、三分法、视线）
+    二         画风与媒材（上色、笔触、网点、年代风格）
+    三         视角与朝向（正侧背、俯仰、回眸）
+    四~十四    按主题分类的主题词（发色、发型、眼睛、表情、服装、姿势、
+               身体、背景、光影、画质、NSFW）
+    十五       局部重绘（修图）专用：参数与提示词模板
+    十六~二十一 质量词、其余要点、权重语法、参数、LoRA、放大
+    二十二     无对应标签的专名，仅作记录
+    各章的「◆」小节是细分类，章末的「补充」来自旧速查表，都可直接查用。
+    直接想开写的话，跳到下面的「提示词模板（公式）」。
+
+
+═══════════════════ 提示词模板（公式） ═══════════════════
+2026-09-16 加入。每个词都逐条实测过，可直接抄。
+
+【核心认知】
+  在 Danbooru 系模型里，「光影美」「构图好」「透视惊艳」全都是**标签**，
+  不是形容词。写 beautiful lighting / amazing perspective 一点用没有 ——
+  那些词要么不存在，要么是 0 帖空标签。
+  必须写**具体、可判定**的东西。
+
+【填空模板】
+  【自动】masterpiece, best quality, 1girl, solo   ← 程序替你加，别重复写
+    ↓ 以下自己填。照着现有图还原 → 写满（40 个也不嫌多）；
+      凭想象创作 → 8–15 个。详见上面「三条规则」第 2 条
+  【取景】全身 / 半身 / 特写 / 远景
+  【视角】低角度 / 仰视视角 / 高角度 / 荷兰角
+  【透视】透视收缩 / 消失点 / 鱼眼
+  【构图】负空间 / 剪影 / 对称
+  【主体】发色 + 发型 + 服装
+  【动作】姿势 + 表情 + 视线
+  【光影】光源 + 方向 + 对比度          ← 三件套，见下
+  【环境】地点
+  【氛围】景深 / 背景虚化 / 速度线
+
+  顺序原则：越靠前越重要，把最想要的三个效果放最前面。
+
+【光影 = 光源 + 方向 + 对比度（三件套）】
+  光源    丁达尔光(sunbeam 13355) / 镜头光晕(lens flare 50704) /
+          黄金时刻(golden hour 384) / 阳光 / 月光 / 霓虹灯
+  方向    逆光(backlighting 45726) / 侧光(sidelighting 13233)
+  对比度  明暗对比(chiaroscuro 444) / 高对比 / 柔和光线
+  ⚠ 死标签别用：轮廓光(rim lighting 查无此名) / 体积光(volumetric
+    lighting 查无此名) / 暗黑(dark theme 0 帖)
+
+【透视 = 视角 + 手法 + 取景（三件套）】
+  视角    低角度/仰视视角(from below) / 高角度/俯视视角(from above) /
+          荷兰角(dutch angle) / 鱼眼(fisheye 6804) / 平视角度
+  手法    ★透视收缩(foreshortening 69968) ← 最有效 / 消失点 /
+          强制透视 / 透视(perspective)
+  取景    全身 / 半身 / 远景 / 大远景
+  ★ 想要「眼前一亮」就用这一组：低角度 + 透视收缩 + 消失点
+    foreshortening 就是「镜头怼近、物体夸张变形」的效果，
+    它比任何形容词都管用。
+  ⚠ 超广角不能用（wide angle 是 0 帖空标签），要广角感用「鱼眼」或「透视」
+
+【构图 = 取景范围 + 空间处理】
+  ★负空间(negative space 1745) = 留白。最容易被忽略、但对「好构图」最有效
+  剪影 / 对称 / 不对称 / 画框 / 边框 / 取景框 都可用
+  ⚠ 三分构图不能用（rule of thirds 不存在）
+
+【细节：别堆 detailed】
+  极高细节 / 细节丰富 / 超高分辨率 三个就够。
+  真正的细节来自**景深 + 取景** —— 景深 + 背景虚化 让主体跳出来，
+  比堆十个细节词有效。
+  ⚠ 浅景深不能用（shallow depth of field 线上不存在），用「景深」就行
+
+【一套可直接抄的例子】（目标是细节构图 + 光影 + 强透视）
+  少女, 单人, 银发, 长发, 白衬衫, 百褶裙, 校服,
+  低角度, 透视收缩, 消失点, 负空间,
+  回头, 看向观众, 微笑, 风吹,
+  逆光, 丁达尔光, 明暗对比, 镜头光晕, 黄金时刻,
+  城市街道, 远景, 景深, 背景虚化, 速度线
+  译文：1girl, solo, silver hair, long hair, white shirt, pleated skirt,
+        school uniform, from below, foreshortening, vanishing point,
+        negative space, looking back, looking at viewer, smile, wind,
+        backlighting, sunbeam, chiaroscuro, lens flare, golden hour,
+        city, street, wide shot, depth of field, bokeh, speed lines
+
+【配套参数】
+  采样器 dpmpp_2m + 调度器 karras（已是默认）
+  steps 30 · CFG 5.5 · Clip skip 2 · 分辨率 1152×832（横向，为透视留空间）
+
+【想更强就把关键词加权】
+  (((透视收缩))), 低角度, 消失点     ← 只给 2–3 个词加权，别全加
+  权重写法见本书「权重语法」一章。
+
+
+═══════════════════ 一、构图与取景 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+少女 / 女孩 / 女生        → 1girl
+女人 / 女性               → 1girl
+少年 / 男孩 / 男生        → 1boy
+两人 / 两个女孩 / 两名女性角色 → 2girls
+多个女孩                  → multiple girls
+单人                      → solo
+半身 / 上半身 / 半身像    → upper body
+全身 / 全身像             → full body
+下半身                    → lower body
+特写                      → close-up
+七分身 / 牛仔镜头         → cowboy shot
+头像 / 肖像               → portrait
+
+
+
+  ◆ 取景范围（从近到远）
+  肖像 / 头像               → portrait
+  特写                      → close-up
+  上半身 / 半身             → upper body
+  中景 / 牛仔镜头 / 七分身  → cowboy shot
+  全身 / 全身像             → full body
+  远景                      → wide shot
+  大远景 / 极大远景         → very wide shot
+  下半身                    → lower body
+
+  ○ 局部特写（配上面的取景一起用，指明强调哪里）
+  眼部特写                  → eye focus
+  嘴部特写                  → mouth focus
+  手部特写                  → hand focus
+  脚部特写                  → foot focus
+  大腿特写                  → thigh focus
+  头发特写                  → hair focus
+  胸部特写                  → breast focus
+  背部特写                  → back focus
+  臀部特写                  → ass focus
+  衣物特写                  → clothes focus
+
+
+  ◆ 裁切与出框
+
+  脚部出框                  → feet out of frame
+  出框                      → outside border
+  半身构图                  → cropped torso
+  腿部截断                  → cropped legs
+  单脚出框                  → foot out of frame
+  头部出框                  → head out of frame
+  浮空手                    → disembodied hand
+  裁剪图                    → cropped
+  眼部出框                  → eyes out of frame
+  肩部裁切                  → cropped shoulders
+  离体头部                  → disembodied head
+  头部特写裁剪              → cropped head
+  膝盖出画                  → knees out of frame
+  分屏裁切 / 单侧裁切       → split crop
+  手臂在画面外              → arm out of frame
+
+  ◆ 视角与角度
+  俯视视角 / 俯视 / 高角度  → from above
+  俯角                      → from above
+  仰视视角 / 仰视 / 低角度  → from below
+  仰角                      → from below
+  侧面视角 / 侧面           → from side
+  背面视角 / 背面 / 背对    → from behind
+  正面                      → straight-on
+  平视角度                  → eye-level
+  荷兰角 / 斜角 / 倾斜构图  → dutch angle
+  鸟瞰视角 / 顶视图 / 鸟瞰  → bird's eye view
+  虫视角 / 极限仰视         → worm's eye view
+  第一人称视角 / 主观视角   → pov
+  第一视角手部              → pov hands
+  多视角                    → multiple pov
+  从外部视角                → from outside
+  室内向外视角              → from inside
+  镜中                      → mirror
+  倒影                      → reflection
+
+
+  ◆ 透视与镜头
+  透视 / 透视画法 / 三点透视 → perspective
+  透视收缩                  → foreshortening
+  强制透视                  → forced perspective
+  消失点                    → vanishing point
+  大气透视                  → atmospheric perspective
+  鱼眼 / 鱼眼镜头           → fisheye
+  全景                      → panorama
+  等距视角                  → isometric
+  ※ 「透视」在 Danbooru 上同时是 x-ray 和 perspective 的官方中文；
+    构图语境下我们固定给 perspective。要看身体内部请直接写 x-ray
+    （必须带连字符，写成 xray 是 0 帖的空标签）。
+
+
+  ◆ 景深与虚化
+  景深                      → depth of field
+  模糊背景                  → blurry background
+  背景虚化                  → bokeh
+  前景虚化                  → blurry foreground
+  动态模糊                  → motion blur
+
+
+  ◆ 构图手法
+
+  边框                      → border
+  立绘                      → tachi-e
+  信箱式 / 遮幅             → letterboxed
+  逆光                      → backlighting
+  剪影                      → silhouette
+  取景框                    → viewfinder
+  竖屏信箱 / 左右留黑       → pillarboxed
+  反射聚焦                  → reflection focus
+  环形灯反光                → ring light reflection
+  照镜子                    → looking at mirror
+  异象镜像                  → different reflection
+  对镜自拍                  → mirror selfie
+  旋转对称                  → rotational symmetry
+  极度精细构图              → absurdly detailed composition
+  对称                      → symmetry
+  画框                      → framed
+  负空间 / 留白             → negative space
+  负空间构图 / 留白构图     → negative space
+  对称姿势                  → symmetrical pose
+  明暗对比                  → chiaroscuro
+  黄金螺旋                  → golden spiral
+  社交媒体构图              → social media composition
+  不对称                    → asymmetry
+  完全对称                  → complete symmetry
+
+  ◆ 三分法（⚠ 不是 Danbooru 标签）
+  三分法构图 / 三分构图 / 井字构图 / 九宫格构图 → rule of thirds
+  ※ rule of thirds 在 Danbooru 上**不存在**（线上查无此标签），
+    它是摄影术语而非 booru 标签，模型只可能有弱响应，别指望落位准。
+    想让主体偏置的可靠做法：用「负空间 / 留白」，或上 ControlNet 构图参考图。
+
+
+  ◆ 主体与视线
+
+  看向观众                  → looking at viewer
+  单人焦点                  → solo focus
+  Q版                       → chibi
+  侧视                      → looking to the side
+  侧脸                      → profile
+  面向观众                  → facing viewer
+  无脸                      → faceless
+  对视                      → eye contact
+  无脸男                    → faceless male
+  看向别处                  → looking away
+
+  ◆ 人数
+
+  单人女性                  → 1girl
+  双人女性                  → 2girls
+  多名男性                  → multiple boys
+  双人男性                  → 2boys
+  三名女性                  → 3girls
+  无人类                    → no humans
+  四名女性                  → 4girls
+  6个以上女孩               → 6+girls
+  3名男性                   → 3boys
+  五名女孩                  → 5girls
+  四男孩                    → 4boys
+  多个无性别角色            → multiple others
+  5名男性                   → 5boys
+  全员                      → everyone
+  人群                      → crowd
+
+  ◆ 人群
+  女                        → 1girl
+  女孩子                    → 1girl
+  妹子                      → 1girl
+  一个女孩                  → 1girl
+  一个少年                  → 1boy
+  一个男孩                  → 1boy
+
+═══════════════════ 二、画风与媒材 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+  画风、媒材、上色、笔触、网点、年代风格。带 (medium)/(style) 的是词库原始写法，照抄即可。
+
+
+  ◆ 传统与特殊媒材
+
+  草稿                      → sketch
+  传统媒介                  → traditional media
+  绘画（媒介）              → painting (medium)
+  水彩画                    → watercolor (medium)
+  马克笔                    → marker (medium)
+  铅笔画                    → graphite (medium)
+  彩色铅笔（媒介）          → colored pencil (medium)
+  毛笔                      → calligraphy brush
+  笔绘                      → pen (medium)
+  仿手绘风格                → faux traditional media
+  混合媒介                  → mixed media
+  记号笔                    → marker
+  丙烯颜料（材质）          → acrylic paint (medium)
+  针管笔                    → millipen (medium)
+  油画（媒介）              → oil painting (medium)
+  蘸水笔（画具）            → nib pen (medium)
+  圆珠笔                    → ballpoint pen (medium)
+  墨水（绘画介质）          → ink (medium)
+  水溶性彩色铅笔            → watercolor pencil (medium)
+  毛笔（媒介）              → calligraphy brush (medium)
+  粉彩（绘画媒介）          → pastel (medium)
+  纸模型                    → papercraft (medium)
+  厚涂法                    → impasto
+  胶带（媒介）              → masking tape (medium)
+  彩色墨水                  → color ink (medium)
+  水粉（媒介）              → gouache (medium)
+  水墨画                    → sumi-e
+  蜡笔画（媒介）            → crayon (medium)
+
+  ◆ 线稿与笔触
+
+  描边                      → outline
+  白色轮廓                  → white outline
+  线稿                      → lineart
+  排线纹理                  → hatching (texture)
+  锯齿线条                  → jaggy lines
+  无线稿                    → no lineart
+  线性排线                  → linear hatching
+  黑色轮廓                  → black outline
+  粗线稿                    → thick lineart
+  交叉排线                  → crosshatching
+  彩色线稿                  → colored lineart
+  粗轮廓                    → thick outlines
+  笔触                      → brush stroke
+
+  ◆ 上色与配色
+  赛璐珞上色                → anime coloring
+  平涂                      → flat color
+  水彩画风                  → watercolor effect
+  背景融合                  → blending
+  单色                      → monochrome
+  灰度                      → greyscale
+  局部上色                  → partially colored
+  局部彩色                  → spot color
+  多色单色画                → multiple monochrome
+  有限配色                  → limited palette
+  黑暗                      → dark
+  低饱和度色彩              → muted colors
+  淡色调                    → pale colors
+  棕褐色                    → sepia
+  淡色系                    → pastel colors
+  高对比度                  → high contrast
+  高饱和度                  → saturated
+  色彩斑斓                  → colorful
+  霓虹配色                  → neon palette
+  冷色调                    → cool colors
+  暖色调                    → warm colors
+  类似色                    → analogous colors
+  互补色                    → complementary colors
+  色调偏移                  → hue shifting
+  彩色描线                  → color trace
+
+  ◆ 漫画与印刷技法
+
+  漫画                      → comic
+  动态线条                  → motion lines
+  四格漫画                  → 4koma
+  注意线                    → notice lines
+  集中线                    → emphasis lines
+  无声漫画                  → silent comic
+  半色调                    → halftone
+  速度线                    → speed lines
+  多组四格漫画              → multiple 4koma
+  网点                      → screentones
+  分段漫画                  → segmented comic
+  方形四格漫画              → square 4koma
+  漫画封面                  → manga cover
+  抖动处理                  → dithering
+  本戴点                    → ben-day dots
+  怒气线                    → shout lines
+
+  ◆ 数字、像素与3D
+  3D（CG）                  → 3d
+  伪3D                      → faux 3d
+  赛璐璐渲染                → cel rendering
+  网络涂鸦                  → oekaki
+  像素画                    → pixel art
+  像素点阵图                → sprite art
+  低多边形                  → low poly
+  PC-98风格             → pc-98 (style)
+
+  ◆ 写实与绘画渲染
+  厚涂风格                  → painterly
+  写实风格                  → realistic
+  伪造照片                  → fake photograph
+  明暗对照法                → chiaroscuro
+
+  ◆ 艺术流派
+  抽象艺术                  → abstract
+  极简主义                  → minimalism
+  立体主义                  → cubism
+  印象派                    → impressionism
+  新艺术运动                → art nouveau
+  日本画                    → nihonga
+  浮世绘                    → ukiyo-e
+  清线风格                  → ligne claire
+  超现实                    → surreal
+  超扁平                    → superflat
+  迷幻风格                  → psychedelic
+
+  ◆ 装饰与版式风格
+
+  彩绘玻璃                  → stained glass
+  拼贴                      → collage
+  华丽边框                  → ornate border
+  塔罗牌                    → tarot
+  塔罗牌风格                → tarot (medium)
+  马赛克艺术                → mosaic art
+
+  ◆ 卡通、仿风与复古审美
+  卡通风格                  → toon (style)
+  美漫风格                  → western comics (style)
+  动画化风格                → animification
+  卡通化                    → cartoonized
+  画风模仿                  → style parody
+  名画恶搞                  → fine art parody
+  复古画风                  → retro artstyle
+  伪复古画风                → faux retro artstyle
+  1960年代风格              → 1960s (style)
+  1970年代风格              → 1970s (style)
+  1980年代风格              → 1980s (style)
+  90年代风格                → 1990s (style)
+  2000年代风格              → 2000s (style)
+  Frutiger_Metro（设计风格） → frutiger metro
+  平成复古                  → heisei retro
+  蒸汽波                    → vaporwave
+  怪核                      → weirdcore
+
+  ◆ 纹理与特殊效果
+  故障艺术                  → glitch art
+  胶片颗粒                  → film grain
+  扫描线                    → scanlines
+  纸张纹理                  → paper texture
+  画布纹理                  → canvas texture
+  颜料飞溅                  → paint splatter
+  泛光                      → bloom
+  背景虚化                  → bokeh
+  焦散                      → caustics
+  色差                      → chromatic aberration
+  剪影                      → silhouette
+  VHS录像带杂讯             → vhs artifacts
+  暗角                      → vignetting
+  镜头光晕                  → lens flare
+  动态模糊                  → motion blur
+  逆光                      → backlighting
+  衍射星芒                  → diffraction spikes
+  景深                      → depth of field
+  光束                      → light rays
+  双重曝光                  → double exposure
+  投影                      → drop shadow
+  过曝                      → overexposure
+
+═══════════════════ 三、视角与朝向 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+
+  看镜头 / 看着观众         → looking at viewer
+  注视他人                  → looking at another
+  回头 / 回头看             → looking back
+  侧面                      → from side
+  背面 / 背对               → from behind
+  斜角                      → dutch angle
+  俯视 / 从上往下 / 高角度  → from above
+  低头 / 向下看             → looking down
+  仰视 / 从下往上 / 低角度  → from below
+  抬头 / 向上看 / 仰头      → looking up
+  正面                      → straight-on
+  倒影                      → reflection
+  镜中                      → mirror
+  不看镜头 / 移开视线 / 看向别处 → looking away
+  超广角                    → wide angle
+
+═══════════════════ 四、发色 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+
+  黑发                      → black hair
+  金发                      → blonde hair
+  棕发                      → brown hair
+  蓝发                      → blue hair
+  多色发                    → multicolored hair
+  粉发                      → pink hair
+  白发                      → white hair
+  灰发                      → grey hair
+  紫发                      → purple hair
+  红发                      → red hair
+  绿发                      → green hair
+  挑染                      → streaked hair
+  双色发 / 双色头发         → two-tone hair
+  橙发                      → orange hair
+  渐变色 / 渐变色头发       → gradient hair
+  水色头发                  → aqua hair
+  挂耳染                    → colored inner hair
+  银发 / 银色               → silver hair
+
+═══════════════════ 五、发型 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+长发 / 长头发             → long hair
+短发 / 短头发             → short hair
+齐肩发                    → medium hair
+双马尾                    → twintails
+马尾 / 单马尾             → ponytail
+麻花辫 / 辫子             → braid
+丸子头                    → hair bun
+齐刘海                    → blunt bangs
+呆毛 / 翘发               → ahoge
+卷发                      → curly hair
+大波浪                    → wavy hair
+
+  ◆ 头发与发质
+
+  发丝垂于眼间              → hair between eyes
+  超长发                    → very long hair
+  鬓发                      → sidelocks
+  中分刘海                  → parted bangs
+  进气口发型                → hair intakes
+  双麻花辫                  → twin braids
+  侧马尾                    → side ponytail
+  飘浮发丝                  → floating hair
+  单麻花辫                  → single braid
+  胡须                      → facial hair
+  低双马尾                  → low twintails
+  侧分刘海                  → swept bangs
+  波波头                    → bob cut
+  螺旋卷发                  → drill hair
+  触角呆毛                  → antenna hair
+  高马尾                    → high ponytail
+  交叉刘海                  → crossed bangs
+  双分刘海                  → double-parted bangs
+  刺猬头                    → spiked hair
+  发筒                      → hair tubes
+  蓬松                      → fluffy hair
+  头发                      → hair
+  发梢                      → hair tips
+  发根                      → hair roots
+  发量                      → voluminous hair
+
+═══════════════════ 六、眼睛 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+
+  ── 补充（早期独立小节并入）──
+
+  蓝眼                      → blue eyes
+  红眼 / 红眼睛             → red eyes
+  紫眼                      → purple eyes
+  绿眼                      → green eyes
+  闭眼                      → closed eyes
+  金眼 / 黄眼               → yellow eyes
+  闭上一只眼                → one eye closed
+  异色瞳                    → heterochromia
+  亮瞳                      → bright pupils
+  半睁眼 / 半闭眼           → half-closed eyes
+  白瞳                      → white pupils
+  遮住单眼                  → one eye covered
+  连体浮游眼                → disembodied linked eye
+  眼部横疤                  → scar across eye
+  眼内图案                  → symbol in eye
+  眼中爱心                  → heart in eye
+  多眼                      → extra eyes
+  无眼                      → no eyes
+  实心椭圆眼                → solid oval eyes
+  眼中有星                  → star in eye
+  第三只眼                  → third eye
+  粉色瞳孔                  → pink pupils
+  豆豆眼                    → solid circle eyes
+  黄瞳孔                    → yellow pupils
+  大小眼                    → uneven eyes
+  上斜眼                    → upturned eyes
+  睁开常闭之眼              → unusually open eyes
+  揉眼睛                    → rubbing eyes
+  血泪                      → blood from eyes
+  眯眼                      → squinting
+
+  ◆ 虹膜颜色
+
+  棕瞳                      → brown eyes
+  粉瞳                      → pink eyes
+  黑瞳                      → black eyes
+  灰瞳                      → grey eyes
+  橙瞳                      → orange eyes
+  水色瞳                    → aqua eyes
+  多色瞳                    → multicolored eyes
+  白眼                      → white eyes
+  双色瞳                    → two-tone eyes
+  渐变色眼睛                → gradient eyes
+  彩虹瞳                    → rainbow eyes
+
+  ◆ 瞳孔与虹膜形状
+  虹膜大小不一              → mismatched irises
+  圈圈眼                    → @ @
+  瞳孔收缩                  → constricted pupils
+  横瞳                      → horizontal pupils
+  异瞳                      → mismatched pupils
+  无瞳孔                    → no pupils
+  矩形瞳孔                  → rectangular pupils
+  符号瞳                    → symbol-shaped pupils
+  时钟眼                    → clock eyes
+  十字瞳孔                  → cross-shaped pupils
+  准星瞳                    → crosshair pupils
+  菱形瞳孔                  → diamond-shaped pupils
+  花形瞳孔                  → flower-shaped pupils
+  心形瞳孔                  → heart-shaped pupils
+  竖瞳                      → slit pupils
+  实心圆瞳                  → solid circle pupils
+  星形瞳孔                  → star-shaped pupils
+  X型瞳孔                   → x-shaped pupils
+
+  ◆ 眼周与特效
+
+  化妆                      → makeup
+  浓眉                      → thick eyebrows
+  发光眼                    → glowing eyes
+  黑眼圈                    → bags under eyes
+  短眉                      → short eyebrows
+  刘海遮眉                  → eyebrows hidden by hair
+  红色眼影                  → red eyeshadow
+  长睫毛                    → long eyelashes
+  卧蚕                      → aegyo sal
+  分叉眉                    → forked eyebrows
+  白色睫毛                  → white eyelashes
+  浓密睫毛                  → thick eyelashes
+  粉色眼影                  → pink eyeshadow
+  眉环                      → eyebrow piercing
+  蓝色眼影                  → blue eyeshadow
+  紫色眼影                  → purple eyeshadow
+  断眉                      → eyebrow cut
+  眼神光痕                  → eye trail
+  卷眉毛                    → curly eyebrows
+  晕妆                      → runny makeup
+  正在化妆                  → applying makeup
+  无眉                      → no eyebrows
+  燃烧之瞳                  → flaming eyes
+
+  ◆ 风格化眼睛
+  像素眼                    → pixel eyes
+  狂乱眼神                  → crazy eyes
+  空洞眼神                  → empty eyes
+  爱心眼                    → heart-shaped eyes
+  死鱼眼                    → jitome
+  三白眼                    → sanpaku
+  星星眼                    → + +
+  螺旋眼                    → spiral-only eyes
+  下垂眼                    → tareme
+  吊眼                      → tsurime
+
+  ◆ 闭眼与眼部状态
+  眨眼                      → blinking
+  单眼闭合                  → one eye closed
+  眯眯眼                    → narrowed eyes
+  恳求的眼神                → pleading eyes
+
+  ◆ 遮挡与眼部配饰
+
+  眼镜                      → glasses
+  单眼遮盖                  → hair over one eye
+  睫毛                      → eyelashes
+  透发可见眼                → eyes visible through hair
+  眼罩                      → eyepatch
+  眼影                      → eyeshadow
+  彩色睫毛                  → colored eyelashes
+  眼线                      → eyeliner
+  遮眼发                    → hair over eyes
+  蒙眼                      → blindfold
+  单眼绷带                  → bandage over one eye
+  脖挂护目镜                → goggles around neck
+  睫毛膏                    → mascara
+  遮眼                      → covering own eyes / covered eyes
+  眼罩式面具                → blindfold mask
+  帽子遮眼                  → hat over eyes
+  假睫毛                    → fake eyelashes
+
+═══════════════════ 七、表情 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+微笑 / 笑                 → smile
+大笑 / 咧嘴笑             → grin
+张嘴                      → open mouth
+脸红 / 害羞               → blush / embarrassed
+严肃                      → serious
+哭 / 流泪                 → crying / tears
+生气                      → angry
+惊讶                      → surprised
+舔嘴唇                    → licking lips
+媚眼                      → wink
+眨眼                      → blinking
+紧张                      → nervous
+
+  ── 补充（早期独立小节并入）──
+
+  ◆ 情绪/基础表情
+
+  汗水                      → sweat
+  汗滴                      → sweatdrop
+  眼泪                      → tears
+  无表情                    → expressionless
+  腮红贴纸                  → blush stickers
+  鼻红晕                    → nose blush
+  开心                      → happy
+  飞溅汗滴                  → flying sweatdrops
+  淡红晕                    → light blush
+  脸部阴影                  → shaded face
+  愤怒符号                  → anger vein
+  泪目                      → tearing up
+  皱眉                      → furrowed brow / frown
+  愤怒                      → angry
+  满脸通红                  → full-face blush
+  微皱眉                    → light frown
+  恐惧                      → scared
+  恼火                      → annoyed
+  醉酒                      → drunk
+  耳红                      → ear blush
+  流鼻血                    → nosebleed
+  悲伤                      → sad
+  小汗珠                    → small sweatdrop
+  困倦                      → sleepy
+  喊叫                      → shouting
+  对话框红晕                → spoken blush
+  思考                      → thinking
+  身体泛红                  → body blush
+  慌乱                      → flustered
+  不屑                      → unamused
+  忧虑                      → worried
+  困惑                      → confused
+  鼻涕                      → snot
+  尖叫                      → screaming
+  假笑                      → false smile
+  叹气                      → sigh
+  喜极而泣                  → happy tears
+  厌恶                      → disgust
+  疼痛                      → pain
+  精疲力竭                  → exhausted
+  兴奋                      → excited
+  擦眼泪                    → wiping tears
+  肩部红晕                  → shoulder blush
+  坚毅                      → determined
+  无聊                      → bored
+  惊慌                      → panicking
+  疯狂                      → crazy
+  搞笑汗滴                  → comedic sweatdrop
+  抑郁                      → depressed
+  抽泣                      → sobbing
+  绝望                      → despair
+  沮丧                      → frustrated / gloom (expression)
+  孤独                      → lonely
+  自信                      → confident
+  失望                      → disappointed
+  苦恼                      → distress
+  轻蔑                      → disdain
+  生闷气                    → sulking
+  沉思                      → pensive
+  怀疑                      → skeptical
+  内疚                      → guilt
+
+  ◆ 笑容/得意/特殊表情
+
+  露齿笑                    → grin
+  浅笑                      → light smile / soft smile
+  调皮表情                  → naughty face
+  得意                      → smug
+  坏笑                      → evil smile / smirk
+  诱惑微笑                  → seductive smile
+  紧张的笑                  → nervous smile
+  狞笑                      → evil grin
+  性兴奋                    → aroused
+  狂气笑容                  → crazy smile
+  得意脸                    → doyagao
+  强颜欢笑                  → forced smile
+  哀伤的微笑                → sad smile
+  食色高潮                  → foodgasm
+  憋笑                      → stifled laugh
+
+  ◆ 眼部表情/眼型
+  闭眼                      → closed eyes
+  单眼闭合                  → one eye closed
+  半闭眼                    → half-closed eyes
+  眯眯眼                    → narrowed eyes
+  睁大眼睛                  → wide-eyed
+  眯眼                      → squinting
+  翻白眼                    → rolling eyes
+  移开视线                  → averting eyes / looking away
+  侧目                      → sideways glance
+  恳求的眼神                → pleading eyes
+  狂乱眼神                  → crazy eyes
+  空洞眼神                  → empty eyes
+  星星眼                    → + +
+  爱心眼                    → heart-shaped eyes
+  螺旋眼                    → spiral-only eyes
+  圈圈眼                    → @ @
+  扭曲眼                    → squiggle eyes
+  死鱼眼                    → jitome
+  下垂眼                    → tareme
+  吊眼                      → tsurime
+  无瞳孔                    → no pupils
+  异瞳                      → mismatched pupils
+  横瞳                      → horizontal pupils
+  矩形瞳孔                  → rectangular pupils
+  竖瞳                      → slit pupils
+  实心圆瞳                  → solid circle pupils
+  符号瞳                    → symbol-shaped pupils
+
+  ◆ 特殊瞳孔
+  心形瞳孔                  → heart-shaped pupils
+  星形瞳孔                  → star-shaped pupils
+  十字瞳孔                  → cross-shaped pupils
+  X型瞳孔                   → x-shaped pupils
+  菱形瞳孔                  → diamond-shaped pupils
+  花形瞳孔                  → flower-shaped pupils
+  蝴蝶状瞳孔                → butterfly-shaped pupils
+  鱼形瞳孔                  → fish-shaped pupils
+  兔形瞳孔                  → rabbit-shaped pupils
+  肉球瞳                    → paw-shaped pupils
+  电源符号状瞳孔            → power symbol-shaped pupils
+  三角瞳                    → triangle-shaped pupils
+  准星瞳                    → crosshair pupils
+  时钟眼                    → clock eyes
+
+  ◆ 眉眼/嘴部细节
+
+  闭嘴                      → closed mouth
+  牙齿                      → teeth
+  微张嘴                    → parted lips
+  虎牙                      → fang
+  吐舌                      → tongue out / :p
+  V型眉                     → v-shaped eyebrows
+  仅露出上排牙齿            → upper teeth only
+  尖牙                      → sharp teeth / fangs
+  咬紧牙关                  → clenched teeth
+  皮色虎牙                  → skin fang
+  波浪形嘴                  → wavy mouth
+  流口水                    → drooling
+  挑眉                      → raised eyebrows
+  裂口                      → split mouth
+  嘟嘴                      → pout
+  八字眉                    → raised inner eyebrows
+  三角嘴                    → triangle mouth
+  圆牙                      → round teeth
+  仅露下齿                  → lower teeth only
+  栗子嘴                    → chestnut mouth
+  露出尖牙                  → fang out
+  口水痕                    → mouth drool
+  侧嘴                      → sideways mouth
+  点状嘴                    → dot mouth
+  噘嘴                      → puckered lips
+  龅牙                      → buck teeth
+  对话框汗滴                → spoken sweatdrop
+  矩形嘴                    → rectangular mouth
+  鼓起脸颊                  → puffy cheeks
+  缝合嘴                    → stitched mouth
+  发光口部                  → glowing mouth
+
+  ◆ 颜文字/漫画表情
+  惊讶脸                    → 0 0
+  叉号眼                    → x x
+
+
+
+这些是英文侧表达式，直接写符号即可，不要用中文名去查。
+
+  XD                        → 表情（说明）
+  x3                        → 表情（说明）
+  o_o                       → 圆眼（说明）
+  T_T                       → 哭泣（说明）
+
+═══════════════════ 八、服装 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+
+
+
+  ◆ 上衣（衬衫 / 毛衣 / 卫衣）
+
+  上衣                      → shirt
+  长袖                      → long sleeves
+  白衬衫                    → white shirt
+  短袖                      → short sleeves
+  翻领衬衫                  → collared shirt
+  无袖                      → sleeveless
+  分离袖                    → detached sleeves
+  泡泡袖                    → puffy sleeves
+  黑衬衫                    → black shirt
+  宽袖                      → wide sleeves
+  背心                      → vest
+  毛衣                      → sweater
+  露脐短衫                  → crop top
+  泡泡短袖                  → puffy short sleeves
+  萌袖                      → sleeves past wrists
+  无袖衬衫                  → sleeveless shirt
+  连帽衫                    → hoodie
+  正装衬衫                  → dress shirt
+  蓝色衬衫                  → blue shirt
+  敞开的衬衫                → open shirt
+  荷叶边袖                  → frilled sleeves
+  红衬衫                    → red shirt
+  掀起上衣                  → shirt lift
+  灰色衬衫                  → grey shirt
+  朱丽叶袖                  → juliet sleeves
+  泡泡长袖                  → puffy long sleeves
+  黑色马甲                  → black vest
+  粉色衬衫                  → pink shirt
+  束腰                      → corset
+  针织背心                  → sweater vest
+  荷叶边衬衫领              → frilled shirt collar
+  卷袖子                    → sleeves rolled up
+  高领毛衣                  → turtleneck sweater
+  塞衣角                    → shirt tucked in
+  缎带装饰袖                → ribbon-trimmed sleeves
+  女衬衫                    → blouse
+  多层袖                    → layered sleeves
+  罗纹毛衣                  → ribbed sweater
+  露脐上衣                  → cropped shirt
+  水手衫                    → sailor shirt
+  荷叶边衬衫                → frilled shirt
+  露肩衬衫                  → off-shoulder shirt
+  交叉挂脖                  → criss-cross halter
+  印花衬衫                  → print shirt
+  袖口                      → sleeve cuffs
+  短袖叠穿长袖              → short over long sleeves
+  无袖高领衫                → sleeveless turtleneck
+  系结衬衫                  → tied shirt
+  束腰外衣                  → tunic
+  童贞杀手毛衣              → virgin killer sweater
+  阿兰毛衣                  → aran sweater
+  开胸毛衣                  → open-chest sweater
+  骑行服                    → bike jersey
+
+  ◆ 外套（夹克 / 大衣 / 披风）
+
+  夹克                      → jacket
+  黑色夹克                  → black jacket
+  敞开的外套                → open jacket
+  大衣                      → coat
+  披风                      → cape
+  斗篷                      → cape
+  白色夹克                  → white jacket
+  小披肩                    → capelet
+  蓝色夹克                  → blue jacket
+  开襟衫                    → cardigan
+  黑色大衣                  → black coat
+  西装外套                  → blazer
+  红色夹克                  → red jacket
+  连帽夹克                  → hooded jacket
+  短款夹克                  → cropped jacket
+  长袍                      → robe
+  灰色夹克                  → grey jacket
+  绿色夹克                  → green jacket
+  棕色夹克                  → brown jacket
+  运动夹克                  → track jacket
+  白大褂                    → lab coat / white coat
+  毛皮镶边夹克              → fur-trimmed jacket
+  披外套                    → jacket on shoulders
+  毛皮镶边外套              → fur-trimmed coat
+  有领夹克                  → collared jacket
+  连帽斗篷                  → hooded cloak
+  外套半脱                  → jacket partially removed
+  双色夹克                  → two-tone jacket
+  毛边斗篷                  → fur-trimmed cape
+  毛边短斗篷                → fur-trimmed capelet
+  连帽大衣                  → hooded coat
+  军装夹克                  → military jacket
+  长外套                    → long coat
+  腰间披风                  → waist cape
+  未穿的外套                → unworn jacket
+  皮夹克                    → leather jacket
+  双面披风                  → two-sided cape
+  翻领大衣                  → collared coat
+  双面夹克                  → two-sided jacket
+  冬装外套                  → winter coat
+  外套系在腰间              → jacket around waist
+  风衣                      → trench coat
+  连帽短披肩                → hooded capelet
+  荷叶边短披肩              → frilled capelet
+  棒球外套                  → letterman jacket
+  侧披风                    → side cape
+  雨衣                      → raincoat
+  破损披风                  → torn cape
+  未穿夹克                  → no jacket
+  敞开的长袍                → open robe
+  双面大衣                  → two-sided coat
+  有领披风                  → collared cape
+  连帽长袍                  → hooded robe
+  毛皮边斗篷                → fur-trimmed cloak
+  飞行员夹克                → bomber jacket
+  飘浮披风                  → floating cape
+  细条纹夹克                → pinstripe jacket
+  裸体穿大衣                → naked coat
+  牛仔夹克                  → denim jacket
+  派克大衣                  → parka
+  皇室长袍                  → royal robe
+
+  ◆ 下装（裤子 / 短裤）
+
+  长裤                      → pants
+  短裤                      → shorts
+  黑裤                      → black pants
+  黑色短裤                  → black shorts
+  超短裤                    → short shorts
+  未穿下装                  → no pants
+  盆骨帘                    → pelvic curtain
+  白色长裤                  → white pants
+  蓝色短裤                  → blue shorts
+  骑行裤                    → bike shorts
+  蓝色裤子                  → blue pants
+  白色短裤                  → white shorts
+  牛仔短裤                  → denim shorts
+  牛仔裤                    → jeans
+  灰色裤子                  → grey pants
+  日式体操短裤              → buruma
+  背带裤                    → overalls
+  灯笼裤                    → bloomers
+  海豚短裤                  → dolphin shorts
+  短裤内穿连裤袜            → pantyhose under shorts
+  拉下裤子                  → pants pull
+  破损长裤                  → torn pants
+  裙下短裤                  → shorts under skirt
+  宽松长裤                  → baggy pants
+  高腰短裤                  → high-waist shorts
+  短裤下拉                  → shorts pull
+  运动裤                    → track pants
+  高腰裤                    → high-waist pants
+  裙下运动短裤              → bike shorts under skirt
+  运动短裤                  → gym shorts
+  瑜伽裤                    → yoga pants
+  连身短裤                  → romper
+  撕裂短裤                  → torn shorts
+  背带短裤                  → suspender shorts
+  敞开的短裤                → open shorts
+  七分裤                    → capri pants
+  裤型袴                    → hakama pants
+  花边短裤                  → frilled shorts
+  西装裤                    → suit pants
+  破洞牛仔裤                → torn jeans
+  开裆裤                    → open pants
+  袴式短裤                  → hakama shorts
+  迷彩裤                    → camouflage pants
+
+  ◆ 裙子
+
+  裙子                      → skirt
+  百褶裙                    → pleated skirt
+  黑色裙子                  → black skirt
+  迷你裙                    → miniskirt
+  蓝色裙子                  → blue skirt
+  红裙                      → red skirt
+  白色裙子                  → white skirt
+  格纹裙                    → plaid skirt
+  荷叶边裙                  → frilled skirt
+  掀裙                      → skirt lift
+  绿色裙子                  → green skirt
+  灰色裙子                  → grey skirt
+  袴                        → hakama
+  粉色裙子                  → pink skirt
+  裙装套装                  → skirt set
+  紫色裙子                  → purple skirt
+  长裙                      → long skirt
+  铅笔裙                    → pencil skirt
+  高腰裙                    → high-waist skirt
+  袴裙                      → hakama skirt
+  背带裙                    → suspender skirt
+  提裙                      → skirt hold
+  层叠裙                    → layered skirt
+  纱笼                      → sarong
+  比基尼裙                  → bikini skirt
+  舞女裙                    → showgirl skirt
+  短款袴裙                  → hakama short skirt
+  及膝裙                    → medium skirt
+  印花裙                    → print skirt
+  拉裙子                    → skirt pull
+  未穿着的裙子              → unworn skirt
+  泡泡裙                    → bubble skirt
+  双色裙                    → two-tone skirt
+  破损裙子                  → torn skirt
+  丝带饰边裙                → ribbon-trimmed skirt
+  西服裙套装                → skirt suit
+  竖条纹裙                  → vertical-striped skirt
+  毛边裙                    → fur-trimmed skirt
+  圆裙                      → circle skirt
+  侧开裙                    → open skirt
+  裙缠单腿                  → skirt around one leg
+  裙中裙                    → skirt under dress
+
+  ◆ 连衣裙
+
+  连衣裙                    → dress
+  白裙                      → white dress
+  白色连衣裙                → white dress
+  黑色连衣裙                → black dress
+  无袖连衣裙                → sleeveless dress
+  蓝色连衣裙                → blue dress
+  荷叶边连衣裙              → frilled dress
+  红色连衣裙                → red dress
+  短连衣裙                  → short dress
+  粉色连衣裙                → pink dress
+  紫色连衣裙                → purple dress
+  抹胸裙                    → strapless dress
+  绿色连衣裙                → green dress
+  翻领连衣裙                → collared dress
+  水手连衣裙                → sailor dress
+  露肩连衣裙                → off-shoulder dress
+  棕色连衣裙                → brown dress
+  背心裙                    → pinafore dress
+  双色连衣裙                → two-tone dress
+  百褶连衣裙                → pleated dress
+  婚纱                      → wedding dress
+  多层连衣裙                → layered dress
+  夏日连衣裙                → sundress
+  提着裙摆                  → holding own dress
+  露背连衣裙                → backless dress
+  铠甲裙                    → armored dress
+  裙装蝴蝶结                → dress bow
+  毛皮镶边连衣裙            → fur-trimmed dress
+  印花连衣裙                → print dress
+  中长裙                    → medium dress
+  竖条纹连衣裙              → vertical-striped dress
+  破损连衣裙                → torn dress
+  透视连衣裙                → see-through dress
+  圣诞裙                    → santa dress
+  裙装花饰                  → dress flower
+  下拉连衣裙                → dress pull
+  高领连衣裙                → turtleneck dress
+  晚礼服                    → evening gown
+  礼服裙                    → gown
+  蕾丝边连衣裙              → lace-trimmed dress
+  交叉系带连衣裙            → cross-laced dress
+  开襟连衣裙                → open dress
+  罗纹连衣裙                → ribbed dress
+  星条旗连衣裙              → american flag dress
+  渐变色连衣裙              → gradient dress
+  铅笔连衣裙                → pencil dress
+  不科学裙装                → impossible dress
+  紧绷连衣裙                → taut dress
+  正装皮鞋                  → dress shoes
+  紧身连衣裙                → tight dress
+  缎带饰边连衣裙            → ribbon-trimmed dress
+  鸡尾酒裙                  → cocktail dress
+  军礼服                    → military dress uniform
+  丧服                      → funeral dress
+  海军礼服                  → naval dress uniform
+
+  ◆ 袜子与腿饰
+
+  过膝袜                    → thighhighs
+  丝袜                      → pantyhose
+  连裤袜                    → pantyhose
+  袜子                      → socks
+  黑色过膝袜                → black thighhighs
+  白色过膝袜                → white thighhighs
+  黑丝                      → black pantyhose
+  腿环                      → thigh strap
+  白袜子                    → white socks
+  黑袜                      → black socks
+  吊袜带扣                  → garter straps
+  网袜                      → fishnets
+  白丝                      → white pantyhose
+  单只过膝袜                → single thighhigh
+  条纹过膝袜                → striped thighhighs
+  棕色连裤袜                → brown pantyhose
+  不对称腿饰                → asymmetrical legwear
+  破损连裤袜                → torn pantyhose
+  渔网连裤袜                → fishnet pantyhose
+  吊带袜                    → garter belt
+  吊袜带                    → garter belt
+  大腿束带连裤袜            → thighband pantyhose
+  连裤袜下的内裤            → panties under pantyhose
+  露趾袜                    → toeless legwear
+  破损过膝袜                → torn thighhighs
+  足袋                      → tabi
+  腿套                      → leg warmers
+  紧身裤                    → leggings
+  泡泡袜                    → loose socks
+  蕾丝腿带                  → frilled thigh strap
+  不对称腿部服饰            → uneven legwear
+  蕾丝边过膝袜              → lace-trimmed thighhighs
+  印花过膝袜                → print thighhighs
+  踩脚袜                    → stirrup legwear
+  裤袜半脱                  → pantyhose pull
+  荷叶边过膝袜              → frilled thighhighs
+  单只袜子                  → single sock
+  单腿连裤袜                → single leg pantyhose
+  翻边短袜                  → bobby socks
+  宽竖条纹过膝袜            → vertical-striped thighhighs
+  踝袜                      → ankle socks
+  奶牛纹过膝袜              → cow print thighhighs
+  靴内过膝袜                → thighhighs under boots
+  印花连裤袜                → print pantyhose
+  未穿袜                    → no socks
+  荷叶边袜                  → frilled socks
+  丝带镶边过膝袜            → ribbon-trimmed thighhighs
+  未穿腿部衣物              → missing legwear
+  袜带                      → legwear garter
+  蝴蝶结袜饰                → bow legwear
+
+  ◆ 鞋子
+
+  鞋子                      → shoes
+  靴子                      → boots
+  高跟鞋                    → high heels
+  黑色鞋子                  → black shoes
+  黑色靴子                  → black boots
+  凉鞋                      → sandals
+  未穿鞋                    → no shoes
+  过膝长靴                  → thigh boots
+  运动鞋                    → sneakers
+  白鞋                      → white shoes
+  棕色鞋子                  → brown shoes
+  乐福鞋                    → loafers
+  及膝靴                    → knee boots
+  棕色靴子                  → brown boots
+  红鞋                      → red shoes
+  白色靴子                  → white boots
+  高跟靴                    → high heel boots
+  系带靴                    → lace-up boots
+  踝靴                      → ankle boots
+  铠甲靴                    → armored boots
+  木屐                      → geta
+  拖鞋                      → slippers
+  脱下的鞋                  → unworn shoes
+  鞋底                      → shoe soles
+  厚底凉鞋                  → platform sandals
+  草履                      → zouri
+  鞋上蝴蝶结                → footwear bow
+  毛边靴                    → fur-trimmed boots
+  高跟凉鞋                  → high heel sandals
+  单只鞋                    → single shoe
+  浅口高跟鞋                → pumps
+  不对称鞋履                → asymmetrical footwear
+  天狗木屐                  → tengu-geta
+  厚底鞋                    → platform shoes
+  鸳鸯鞋                    → mismatched footwear
+  绑带高跟鞋                → strappy heels
+  兽爪鞋                    → paw shoes
+  厚底靴                    → platform boots
+  舵形鞋                    → rudder footwear
+  雨靴                      → rubber boots
+  细高跟鞋                  → stiletto heels
+  露趾靴                    → open-toe boots
+  挂鞋                      → shoe dangle
+  手持未穿过的鞋            → holding unworn shoes
+  翻边靴                    → fold-over boots
+  手持鞋子                  → holding shoes
+
+  ◆ 手套
+
+  手套                      → gloves
+  黑色手套                  → black gloves
+  白手套                    → white gloves
+  长手套                    → elbow gloves
+  长筒手套                  → elbow gloves
+  露指手套                  → fingerless gloves
+  腕饰                      → wrist cuffs
+  新娘手套                  → bridal gauntlets
+  护手                      → gauntlets
+  红色手套                  → red gloves
+  棕色手套                  → brown gloves
+  单只手套                  → single glove
+  蓝色手套                  → blue gloves
+  半露指手套                → partially fingerless gloves
+  半指手套                  → half gloves
+  紫色手套                  → purple gloves
+  白色腕带                  → white wrist cuffs
+  不对称手套                → asymmetrical gloves
+  兽爪手套                  → paw gloves
+  连指手套                  → mittens
+  毛边手套                  → fur-trimmed gloves
+  印花手套                  → print gloves
+  双色手套                  → two-tone gloves
+  单侧长手套                → single elbow glove
+  荷叶边手套                → frilled gloves
+  奶牛纹手套                → cow print gloves
+  荷叶边护腕                → frilled wrist cuffs
+  单只露指手套              → single fingerless glove
+  肘下长手套                → under-elbow gloves
+  单侧护手                  → single gauntlet
+  整理手套                  → adjusting gloves
+  拳击手套                  → boxing gloves
+  装甲手套                  → armored gloves
+  利爪护手                  → clawed gauntlets
+
+  ◆ 帽子与头饰
+
+  帽子 / 贝雷帽             → hat / beret
+  发带                      → hair ribbon
+  蝴蝶结发饰                → hair bow
+  发箍                      → hairband
+  发夹                      → hairclip
+  兜帽                      → hood
+  头花                      → hair flower
+  黑帽                      → black hat
+  女仆头饰                  → maid headdress
+  白帽子                    → white hat
+  黑色发带                  → black hairband
+  兜帽放下                  → hood down
+  女巫帽                    → witch hat
+  头带                      → headband
+  女仆帽                    → mob cap
+  皇冠                      → crown
+  面纱                      → veil
+  红帽子                    → red hat
+  冠冕                      → tiara
+  帽子蝴蝶结                → hat bow
+  帽子丝带                  → hat ribbon
+  戴兜帽                    → hood up
+  棒球帽                    → baseball cap
+  大檐帽                    → peaked cap
+  圣诞帽                    → santa hat
+  兽耳发箍                  → animal ear hairband
+  高礼帽                    → top hat
+  头襟帽                    → tokin hat
+  帽子装饰                  → hat ornament
+  遮阳帽                    → sun hat
+  迷你帽                    → mini hat
+  帽花                      → hat flower
+  冠冕发辫                  → crown braid
+  未佩戴的帽子              → unworn hat
+  护士帽                    → nurse cap
+  头巾                      → bandana
+  草帽                      → straw hat
+  兔耳发箍                  → rabbit ear hairband
+  动物兜帽                  → animal hood
+  军帽                      → military hat
+  阴蒂包皮                  → clitoral hood
+  报童帽                    → newsboy cap
+  小皇冠                    → mini crown
+  平行发夹                  → parallel hairclips
+  蝴蝶结发箍                → bow hairband
+  荷叶边发带                → frilled hairband
+
+  ◆ 眼镜与面具
+
+  眼镜                      → glasses
+  面具                      → mask
+  墨镜                      → sunglasses
+  护目镜                    → goggles
+  头戴护目镜                → goggles on head
+  口罩                      → mouth mask
+  蒙眼                      → blindfold
+  头顶面具                  → mask on head
+  狐面                      → fox mask
+  黑色口罩                  → black mask
+  单片眼镜                  → monocle
+  手持面具                  → holding mask
+  头饰上的护目镜            → goggles on headwear
+  拉下口罩                  → mask pull
+  未佩戴的面具              → unworn mask
+  反光眼镜                  → opaque glasses
+  多米诺面具                → domino mask
+  医用口罩                  → surgical mask
+  睡眠眼罩                  → sleep mask
+  防毒面具                  → gas mask
+  鬼面具                    → oni mask
+  潜水面罩                  → diving mask
+  骷髅面具                  → skull mask
+  半面罩                    → half mask
+  口罩挂脖                  → mask around neck
+
+  ◆ 颈肩配饰（领带 / 围巾 / 项圈）
+
+  领带                      → necktie
+  颈圈                      → choker
+  腰带                      → belt
+  领结                      → bowtie
+  水手领                    → sailor collar
+  项链                      → necklace
+  围巾                      → scarf
+  项圈                      → collar
+  黑色颈圈                  → black choker
+  领巾                      → neckerchief
+  阿斯科特领巾              → ascot
+  假领                      → detached collar
+  红色领带                  → red necktie
+  红色领结                  → red bowtie
+  黑色领带                  → black necktie
+  白色水手领                → white sailor collar
+  蓝色水手领                → blue sailor collar
+  翼领                      → wing collar
+  蓝色领带                  → blue necktie
+  立领                      → high collar
+  皮带扣                    → belt buckle
+  吊坠                      → pendant
+  后背蝴蝶结                → back bow
+  荷叶边蝴蝶结              → frilled bow
+  耳饰蝴蝶结                → ear bow
+  十字架项链                → cross necklace
+  串珠项链                  → bead necklace
+  皮带式项圈                → belt collar
+  尖刺项圈                  → spiked collar
+  腰包                      → belt pouch
+  宠物项圈                  → animal collar
+  持弓                      → holding bow (weapon)
+  荷叶边项圈                → frilled choker
+  丝带颈圈                  → ribbon choker
+  珍珠项链                  → pearl necklace
+  乳间领带                  → necktie between breasts
+  开领                      → open collar
+  传统领结                  → traditional bowtie
+  短领带                    → short necktie
+  荷叶边领                  → frilled collar
+  尾部蝴蝶结                → tail bow
+  多重皮带                  → multiple belts
+  链条项链                  → chain necklace
+  腰间蝴蝶结                → waist bow
+  撞色领                    → contrast collar
+  腿带                      → thigh belt
+  斜条纹领带                → diagonal-striped necktie
+  蝴蝶结发型                → bow-shaped hair
+
+  ◆ 首饰与配饰
+
+  头饰                      → hair ornament
+  发饰                      → hair ornament
+  首饰                      → jewelry
+  耳环                      → earrings
+  指甲油                    → nail polish
+  手链                      → bracelet
+  身体穿孔                  → piercing
+  戒指                      → ring
+  耳部穿孔                  → ear piercing
+  胸针                      → brooch
+  单侧耳环                  → single earring
+  环形发髻                  → hair rings
+  星星发饰                  → star hair ornament
+  游泳圈                    → swim ring
+  心形发饰                  → heart hair ornament
+  圆环耳环                  → hoop earrings
+  耳钉                      → stud earrings
+  蝴蝶发饰                  → butterfly hair ornament
+  脚链                      → anklet
+  食物主题发饰              → food-themed hair ornament
+  羽毛发饰                  → feather hair ornament
+  乳环                      → nipple piercing
+  兽耳穿孔                  → animal ear piercing
+  手镯                      → bangle
+  青蛙发饰                  → frog hair ornament
+  多个戒指                  → multiple rings
+  兔子发饰                  → rabbit hair ornament
+  结婚戒指                  → wedding ring
+  星形耳环                  → star earrings
+  叶子发饰                  → leaf hair ornament
+  面部穿孔                  → face piercing
+  脐环                      → navel piercing
+  心形耳环                  → heart earrings
+  十字发饰                  → cross hair ornament
+  颈环                      → neck ring
+  珠串手链                  → bead bracelet
+  流苏耳环                  → tassel earrings
+  尖刺手环                  → spiked bracelet
+  编发圆环                  → braided hair rings
+  金耳环                    → gold earrings
+  十字架耳环                → cross earrings
+  爱心胸针                  → heart brooch
+  悬浮耳环                  → floating earrings
+  杠铃穿刺饰                → barbell piercing
+  金手镯                    → gold bracelet
+  多耳环                    → multiple earrings
+  球形耳环                  → sphere earrings
+  花朵耳环                  → flower earrings
+
+  ◆ 内衣与睡衣
+
+  内衣                      → underwear
+  内裤                      → panties
+  胸罩                      → bra
+  白内裤                    → white panties
+  黑色内裤                  → black panties
+  未戴胸罩                  → no bra
+  未穿内裤                  → no panties
+  黑色胸罩                  → black bra
+  仅穿内衣                  → underwear only
+  吊带衫                    → camisole
+  粉色内裤                  → pink panties
+  蝴蝶结内裤                → bow panties
+  运动胸罩                  → sports bra
+  条纹内裤                  → striped panties
+  侧系带内裤                → side-tie panties
+  白色胸罩                  → white bra
+  睡衣                      → pajamas
+  内裤拨开                  → panties aside
+  蓝色内裤                  → blue panties
+  高衩内裤                  → highleg panties
+  内裤挂在单腿              → panties around one leg
+  汗衫                      → undershirt
+  衬裙                      → petticoat
+  男士内裤                  → male underwear
+  蝴蝶结文胸                → bow bra
+  系带内裤                  → string panties
+  蕾丝边胸罩                → lace-trimmed bra
+  娃娃裙睡衣                → babydoll
+  蕾丝边内裤                → lace-trimmed panties
+  内衣肩带                  → bra strap
+  未穿着的内裤              → unworn panties
+  胸罩上提                  → bra lift
+  睡裙                      → nightgown
+  印花内裤                  → print panties
+  内衣透出                  → bra visible through clothes
+  荷叶边胸罩                → frilled bra
+  荷叶边内裤                → frilled panties
+  下拉胸罩                  → bra pull
+  湿内裤                    → wet panties
+  胸罩微露                  → bra peek
+  低腰内裤                  → lowleg panties
+  猫咪内衣                  → cat lingerie
+  未穿戴的胸罩              → unworn bra
+  手持内衣                  → holding underwear
+  手持内裤                  → holding panties
+  开裆内裤                  → crotchless panties
+  平角内裤                  → boxers
+  猫耳内裤                  → cat ear panties
+  吊带睡裙                  → chemise
+  无肩带文胸                → strapless bra
+
+  ◆ 泳装与连体衣
+
+  泳装 / 泳衣               → swimsuit
+  比基尼                    → bikini
+  连体泳衣                  → one-piece swimsuit
+  黑色比基尼                → black bikini
+  白色比基尼                → white bikini
+  侧系带比基尼下装          → side-tie bikini bottom
+  黑色紧身连体衣            → black leotard
+  无肩带紧身衣              → strapless leotard
+  高叉紧身衣                → highleg leotard
+  死库水                    → school swimsuit
+  系带比基尼                → string bikini
+  蓝色比基尼                → blue bikini
+  微型比基尼                → micro bikini
+  黑色连体衣                → black bodysuit
+  荷叶边比基尼              → frilled bikini
+  红色比基尼                → red bikini
+  白色连体紧身衣            → white leotard
+  仅比基尼上装              → bikini top only
+  竞速泳衣                  → competition swimsuit
+  印花比基尼                → print bikini
+  前系带比基尼上衣          → front-tie bikini top
+  衣内比基尼                → bikini under clothes
+  高衩连体泳衣              → highleg one-piece swimsuit
+  连体丝袜                  → bodystocking
+  比基尼铠甲                → bikini armor
+  高衩比基尼                → highleg bikini
+  衣下泳装                  → swimsuit under clothes
+  弹弓泳衣                  → slingshot swimsuit
+  金色比基尼                → gold bikini
+  休闲连体泳衣              → casual one-piece swimsuit
+  连体衣                    → jumpsuit
+  奶牛纹比基尼              → cow print bikini
+  多系带比基尼下装          → multi-strapped bikini bottom
+  仅穿比基尼下装            → bikini bottom only
+  内穿连体衣                → leotard under clothes
+  竞赛式学校泳装            → competition school swimsuit
+  侧拨比基尼泳裤            → bikini bottom aside
+  旧式泳装                  → old school swimsuit
+  丁字比基尼                → thong bikini
+  紧身衣侧拨                → leotard aside
+  解开的比基尼上衣          → untied bikini top
+  无肩带比基尼              → strapless bikini
+  荷叶边连体泳衣            → frilled one-piece swimsuit
+  撩起比基尼上衣            → bikini top lift
+  拉扯连体泳衣              → one-piece swimsuit pull
+  双色比基尼                → two-tone bikini
+  拨开泳衣                  → swimsuit aside
+  女仆装比基尼              → maid bikini
+  眼罩式比基尼              → eyepatch bikini
+  运动紧身衣                → athletic leotard
+  紧身连体衣                → unitard / leotard
+  发热科技紧身衣            → heattech leotard
+
+  ◆ 传统服饰
+
+  和服 / 浴衣               → japanese clothes / yukata
+  中式服装                  → chinese clothes
+  旗袍                      → qipao
+  白色和服                  → white kimono
+  蓝色和服                  → blue kimono
+  印花和服                  → print kimono
+  黑色和服                  → black kimono
+  红色和服                  → red kimono
+  汉服                      → hanfu
+  粉色和服                  → pink kimono
+  紫色和服                  → purple kimono
+  敞开和服                  → open kimono
+  短款和服                  → short kimono
+  绿色和服                  → green kimono
+  碎花和服                  → floral print kimono
+  无袖和服                  → sleeveless kimono
+  黄色和服                  → yellow kimono
+  荷叶边和服                → frilled kimono
+  毛领和服                  → fur-trimmed kimono
+  十二单                    → layered kimono
+  浴衣（浴袍）              → bath yukata
+  侧开和服                  → sideless kimono
+
+  ◆ 制服与职业装
+
+  校服                      → school uniform
+  水手服                    → serafuku
+  女仆                      → maid
+  军装                      → military uniform
+  西装                      → suit
+  军事                      → military
+  女仆围裙                  → maid apron
+  冬季制服                  → winter uniform
+  夏季制服                  → summer uniform
+  体操服                    → gym uniform
+  特雷森学园制服            → tracen school uniform
+  黑色水手服                → black serafuku
+  修女                      → nun
+  学兰                      → gakuran
+  机甲驾驶服                → mecha pilot suit
+  制服                      → uniform
+  啦啦队员                  → cheerleader
+  军用车辆                  → military vehicle
+  护士                      → nurse
+  黑色西装                  → black suit
+  女服务生                  → waitress
+  警察                      → police
+  莲之空女学院校服          → hasu no sora school uniform
+  警服                      → police uniform
+  运动套装                  → track suit
+  海军制服                  → naval uniform
+  机动战士                  → mobile suit
+  见泷原中学校服            → mitakihara school uniform
+  非传统女仆装              → unconventional maid
+  县立北高校制服            → kita high school uniform
+  樱丘高中校服              → sakuragaoka high school uniform
+  大洗女子学园校服          → ooarai school uniform
+  水手战士服                → sailor senshi uniform
+  鬼杀队队服                → demon slayer uniform
+  特雷森学园训练服          → tracen training uniform
+  男仆装                    → male maid
+  常盘台校服                → tokiwadai school uniform
+  音乃木坂学院校服          → otonokizaka school uniform
+  商务西装                  → business suit
+  宇航服                    → spacesuit
+  迦勒底御主制服            → chaldea master uniform
+  和风女仆                  → wa maid
+  足球队服                  → soccer uniform
+  月光馆学园制服            → gekkoukan high school uniform
+  员工制服                  → employee uniform
+  幼儿园制服                → kindergarten uniform
+  羽丘女子学园制服          → haneoka school uniform
+  虹咲学园制服              → nijigasaki school uniform
+  陵樱学园制服              → ryouou school uniform
+  棒球服                    → baseball uniform
+  浦之星女学院校服          → uranohoshi school uniform
+  阿斯提卡西亚校服          → asticassia school uniform
+  初星学园校服              → hatsuboshi gakuen school uniform
+  七森中学校服              → nanamori school uniform
+  执事                      → butler
+  帕拉迪岛军服              → paradis military uniform
+  无尾礼服                  → tuxedo
+  西装裤装                  → pant suit
+  直江津高中校服            → naoetsu high school uniform
+  零式装甲                  → zero suit
+  北宇治高中校服            → kitauji high school uniform
+  黑森峰军服                → kuromorimine military uniform
+  莉可丽丝制服              → lycoris uniform
+  八十神高中制服            → yasogami school uniform
+  传统修女装                → traditional nun
+  明治时期女子校服          → meiji schoolgirl uniform
+  排球服                    → volleyball uniform
+  网球服                    → tennis uniform
+  极巨腕带                  → dynamax band
+  潜水服                    → diving suit
+  军用作战服                → military combat uniform
+  篮球服                    → basketball uniform
+  田径服                    → track uniform
+  快餐店制服                → fast food uniform
+  赛车服                    → racing suit
+  乐队制服                  → band uniform
+  卫士强化装备              → fortified suit
+  飞行服                    → pilot suit / flight suit
+  军用迷彩服                → military fatigues
+  防化服                    → hazmat suit
+  美式橄榄球服              → american football uniform
+  医疗洗手服                → medical scrubs
+  橄榄球服                  → rugby uniform
+
+  ◆ 奇幻与装甲
+  铠甲                      → armor
+  肩甲                      → shoulder armor
+  无袖罩袍                  → tabard
+  日式铠甲                  → japanese armor
+  护胫                      → greaves
+  单肩甲                    → single pauldron
+  黑色铠甲                  → black armor
+  全身铠甲                  → full armor
+  动力装甲                  → power armor
+  红色铠甲                  → red armor
+  蓝色盔甲                  → blue armor
+  白色铠甲                  → white armor
+  金色铠甲                  → gold armor
+  臂铠                      → arm armor
+  锁子甲                    → chainmail
+  腿甲                      → leg armor
+  板甲                      → plate armor
+  蓝色罩衫                  → blue tabard
+  皮甲                      → leather armor
+  鳞甲                      → scale armor
+  布甲                      → gambeson
+  华丽铠甲                  → ornate armor
+  狂战士铠甲                → berserker armor
+
+  ◆ 主题套装（节日 / 玩偶服）
+
+  替换服装                  → alternate costume
+  兔耳                      → rabbit ears
+  兔女郎                    → playboy bunny
+  狼耳                      → wolf ears
+  兔尾                      → rabbit tail
+  改版服装                  → adapted costume
+  狼尾                      → wolf tail
+  狼娘                      → wolf girl
+  兔娘                      → rabbit girl
+  圣诞节                    → christmas
+  圣诞装                    → santa costume
+  万圣节                    → halloween
+  兔子                      → rabbit
+  幽灵                      → ghost
+  泰迪熊                    → teddy bear
+  虎耳                      → tiger ears
+  万圣节装扮                → halloween costume
+  动物装                    → animal costume
+  兔子玩偶                  → stuffed rabbit
+  吸血鬼                    → vampire
+  鲨鱼尾                    → shark tail
+  超级英雄制服              → superhero costume
+  鲨鱼娘                    → shark girl
+  虎尾                      → tiger tail
+  熊耳                      → bear ears
+  圣诞树                    → christmas tree
+  虎纹                      → tiger print
+  羊角                      → sheep horns
+  虎娘                      → tiger girl
+  圣诞快乐                  → merry christmas
+  狼少年                    → wolf boy
+  狼                        → wolf
+  服装互换                  → costume switch
+  企鹅                      → penguin
+  兔耳手势                  → rabbit pose
+  熊                        → bear
+  驯鹿角                    → reindeer antlers
+  狼尾发型                  → wolf cut
+  圣诞挂饰                  → christmas ornaments
+  羊娘                      → sheep girl
+  非传统兔女郎              → nontraditional playboy bunny
+  羊耳                      → sheep ears
+  绵羊                      → sheep
+  老虎                      → tiger
+  万圣节快乐                → happy halloween
+  虎耳少年                  → tiger boy
+  兔耳少年                  → rabbit boy
+  海盗装                    → pirate costume
+  木乃伊装                  → mummy costume
+  幽灵装                    → ghost costume
+  人偶服                    → kigurumi
+  驯鹿装                    → reindeer costume
+  吸血鬼装扮                → vampire costume
+  鲨鱼装                    → shark costume
+  熊玩偶服                  → bear costume
+  猫咪装                    → cat costume
+  狼玩偶服                  → wolf costume
+  企鹅装                    → penguin costume
+  兔兔装                    → rabbit costume
+  奶牛装                    → cow costume
+  燕尾服兔女郎              → tailcoat playboy bunny
+  绵羊装                    → sheep costume
+  老虎装                    → tiger costume
+  狗狗兽装                  → dog costume
+  熊猫装                    → panda costume
+
+  ◆ 亚文化时尚
+  洛丽塔时尚                → lolita fashion
+  辣妹                      → gyaru
+  哥特萝莉                  → gothic lolita
+  小辣妹                    → kogal
+  哥特风                    → goth fashion
+  甜美洛丽塔                → sweet lolita
+  Y2K时尚                   → y2k fashion
+  街头服饰                  → streetwear
+  美式辣妹                  → amesuku gyaru
+  黑辣妹                    → ganguro
+  Decora系                  → decora
+  机能风                    → techwear
+
+  ◆ 纹样与材质
+
+  丝带                      → ribbon
+  荷叶边                    → frills
+  条纹衣物                  → striped clothes
+  红丝带                    → red ribbon
+  毛皮镶边                  → fur trim
+  丝带领带                  → neck ribbon
+  格子服饰                  → plaid clothes
+  黑色丝带                  → black ribbon
+  花卉印花                  → floral print
+  蓝色丝带                  → blue ribbon
+  牛仔布                    → denim
+  流苏                      → tassel
+  动物纹                    → animal print
+  白色丝带                  → white ribbon
+  圆点花纹                  → polka dot
+  丝带饰边                  → ribbon trim
+  竖条纹服饰                → vertical-striped clothes
+  蕾丝                      → lace
+  中置褶边                  → center frills
+  体毛                      → body fur
+  奶牛纹                    → cow print
+  发束丝带                  → tress ribbon
+  星形图案                  → star print
+  爪印                      → paw print
+  皮衣                      → leather
+  斜条纹衣服                → diagonal-striped clothes
+  细条纹                    → pinstripe pattern
+  腿部丝带                  → leg ribbon
+  双色毛皮                  → two-tone fur
+  耳上丝带                  → ear ribbon
+  毛边帽子                  → fur-trimmed headwear
+  旗帜印花                  → flag print
+  爱心印花                  → heart print
+  食物印花                  → food print
+  豹纹                      → leopard print
+  玫瑰印花                  → rose print
+  角饰丝带                  → horn ribbon
+  尾丝带                    → tail ribbon
+  静止花纹                  → unmoving pattern
+  叶子印花                  → leaf print
+  丝绸                      → silk
+  龙纹印花                  → dragon print
+  美国国旗印花              → american flag print
+  腕部丝带                  → wrist ribbon
+  水果印花                  → fruit print
+  蝙蝠印花                  → bat print
+
+  ◆ 穿着状态（敞开 / 掀起 / 半脱）
+
+  张嘴                      → open mouth
+  闭嘴                      → closed mouth
+  闭眼                      → closed eyes
+  敞开的衣物                → open clothes
+  单眼闭合                  → one eye closed
+  掀起衣服                  → clothes lift
+  撕裂衣物                  → torn clothes
+  透明背景                  → transparent background
+  半闭眼                    → half-closed eyes
+  脱衣                      → undressing
+  衣物拨开                  → clothing aside
+  湿衣服                    → wet clothes
+  睁眼哭泣                  → crying with eyes open
+  紧身                      → skin tight
+  打开的书                  → open book
+  整理衣物                  → adjusting clothes
+  推眼镜                    → adjusting eyewear
+  整理头发                  → adjusting hair
+  裤链敞开                  → open fly
+  张开手掌                  → open hand
+  紧身服装                  → tight clothes
+  半解纽扣                  → partially unbuttoned
+  解开扣子                  → unbuttoned
+  透明                      → transparent
+  整理头饰                  → adjusting headwear
+  张开双手                  → open hands
+  衣衫不整                  → partially undressed
+  开着的门                  → open door
+  穿衣                      → dressing
+  收起的伞                  → closed umbrella
+  透明雨伞                  → transparent umbrella
+  为他人脱衣                → undressing another
+  开着的窗户                → open window
+
+  ◆ 其它
+  兽耳                      → animal ears
+  蝴蝶结                    → bow
+  裸足 / 赤脚               → barefoot
+  猫耳                      → cat ears
+  围裙                      → apron
+  纹身                      → tattoo
+  绷带                      → bandages
+  女仆装                    → enmaided
+  运动服                    → sportswear
+  裸体围裙                  → naked apron
+  梦幻可爱                  → yume kawaii
+  地雷系                    → jirai kei
+  摔跤服                    → wrestling outfit
+  机车服                    → biker clothes
+  束缚装                    → bondage outfit
+  紧身赛车服                → bikesuit
+  赛博时尚                  → cyber fashion
+  束缚衣                    → straitjacket
+  近乎全裸围裙              → nearly naked apron
+  浴袍                      → bathrobe
+  司祭服                    → cassock
+  半透明兔女郎装            → translucent bunnysuit
+  露背高领毛衣              → virgin killer outfit
+
+═══════════════════ 九、动作与姿势 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+站立                      → standing
+坐着                      → sitting
+躺着                      → lying
+趴着                      → on stomach
+  蹲着 / 蹲姿               → squatting
+  跪着 / 跪姿               → kneeling
+  走路 / 行走               → walking
+  跑 / 跑步                 → running
+睡觉                      → sleeping
+弯腰                      → bent over
+举手 / 举起双手           → arms up
+双手叉腰                  → hands on own hips
+抱臂 / 交叉双臂           → crossed arms / crossed arms
+  交叉腿 / 双腿交叉         → crossed legs
+双腿分开                  → spread legs
+抬起腿 / 翘腿             → leg up / crossed legs
+背手                      → holding behind back
+歪头                      → head tilt
+扭头                      → head turned
+手放脸旁                  → hand on own face
+比心                      → heart hands
+拿东西 / 手持             → holding
+手指比心                  → finger heart
+双手比心                  → double finger heart
+单手比心                  → half-heart hands
+剪刀手 / 比耶             → v
+双手比耶                  → double v
+竖大拇指                  → thumbs up
+OK 手势                   → ok sign
+挥手                      → waving
+敬礼                      → salute
+手枪手势                  → finger gun
+指点                      → pointing
+向上指                    → pointing up
+招手                      → beckoning
+握拳                      → clenched hand
+举起拳头                  → raised fist
+张开手指                  → spread fingers
+十指交叉                  → interlocked fingers
+合十 / 祈祷               → palms together / praying
+手按胸口                  → hand on own chest
+单手叉腰                  → hand on own hip
+双手背在身后              → arms behind back
+猫爪姿势                  → paw pose
+爪形手势                  → claw pose
+牵手                      → holding hands
+拥抱                      → hug
+亲吻 / 接吻               → kiss
+舌吻                      → french kiss
+
+  ── 补充（早期独立小节并入）──
+
+  ◆ 基础体位
+  坐姿                      → sitting
+  跪姿                      → kneeling
+  单膝跪地                  → on one knee
+  躺卧                      → lying
+  仰卧                      → on back
+  侧卧                      → on side
+  蹲姿                      → squatting
+  斜倚                      → reclining
+  保持平衡                  → balancing
+  单脚站立                  → standing on one leg
+  站立分腿                  → legs apart
+
+
+  单膝跪                    → one knee
+  ◆ 坐姿/蜷缩
+
+  鸭子坐                    → wariza
+  双腿交叉                  → crossed legs
+  正坐                      → seiza
+  坐在人身上                → sitting on person
+  侧坐                      → yokozuwari
+  盘腿坐                    → indian style
+  抱膝坐                    → hugging own legs
+  坐在腿上                  → sitting on lap
+  蹲式骑乘位                → squatting cowgirl position
+  坐在王座上                → sitting on throne
+  颜面骑乘                  → sitting on face
+  胎儿姿势                  → fetal position
+  坐在台阶上                → sitting on stairs
+  坐在树上                  → sitting in tree
+  蝴蝶坐                    → butterfly sitting
+  四字盘腿坐                → figure four sitting
+  结跏趺坐                  → lotus position
+
+  ◆ 全身姿态/支撑
+  四肢着地                  → all fours
+  胸膝位                    → top-down bottom-up
+  土下座                    → prostration / dogeza
+  胸倒立                    → chest stand
+  畏缩                      → cowering / wince
+  钉十字架刑                → crucifixion
+  脸部着地                  → faceplant
+  战斗姿态                  → fighting stance
+  拔刀姿势                  → battoujutsu stance
+  拉伸                      → stretching
+  超级英雄着陆              → superhero landing
+  上下颠倒                  → upside-down
+  倒立                      → handstand
+  瑜伽                      → yoga
+  手臂支撑                  → arm support
+  托腮倚头                  → head rest
+  对立式平衡                → contrapposto
+  摆姿势                    → posing
+
+  ◆ 头部姿态
+  低头                      → head down / looking down
+  头部后仰                  → head back
+  转头                      → turning head
+
+  ◆ 躯干/倾斜
+  反弓背                    → arched back
+  倾斜站立                  → leaning
+  后仰                      → leaning back
+  前倾                      → leaning forward
+  侧倾                      → leaning to the side
+  含胸驼背                  → slouching
+  挺胸后仰                  → sway back
+  扭腰                      → twisted torso
+
+  ◆ 手臂整体位置
+  双臂上举                  → arms up
+  抬手                      → hand up
+  双手抬起                  → hands up
+  手臂下垂                  → arm at side
+  双臂下垂                  → arms at sides
+  单臂放在头后              → arm behind head
+  双手抱头                  → arms behind head / hands on own head
+  手臂置于背后              → arm behind back
+  双臂交叉                  → crossed arms
+  单臂伸出                  → outstretched arm
+  双臂伸出                  → outstretched arms
+  张开双臂                  → spread arms
+  双臂横置                  → arms across body
+  手臂横在腰前              → arm across waist
+  托胸                      → arm under breasts
+  手臂置于乳下              → arms under breasts
+
+  ◆ 头脸/头发位置
+  手扶头部                  → hand on own head
+  手插头发                  → hand in own hair
+  手放自己头顶              → hands on own head
+  手扶脸                    → hand on own face
+  双手捧脸                  → hands on own face
+  手托脸颊                  → hand on own cheek
+  托腮                      → hands on own cheeks
+  手托下巴                  → hand on own chin
+  双手托腮                  → hands on own chin
+  手扶颈部                  → hand on own neck
+  双手掐颈                  → hands on own neck
+  手搭自己肩上              → hand on own shoulder
+
+  ◆ 胸腹/腰胯位置
+  双手抚胸                  → hands on own chest
+  手抚腹部                  → hand on own stomach
+  双手按腹                  → hands on own stomach
+  叉腰                      → hands on own hips
+
+  ◆ 自身手臂/口袋
+  手抚手臂                  → hand on own arm
+  双手扶臂                  → hands on own arms
+  手扶手肘                  → hand on own elbow
+  手搭在自己手腕上          → hand on own wrist
+  握住自己的手腕            → holding own wrist
+  揣袖子                    → hands in opposite sleeves
+  单手插兜                  → hand in pocket
+  插兜                      → hands in pocket
+  双手插兜                  → hands in pockets
+
+  ◆ 腿部/坐姿手位
+  手抚大腿                  → hand on own thigh
+  双手置于大腿上            → hands on own thighs
+  单手放在膝盖上            → hand on own knee
+  双手扶膝                  → hands on own knees
+  手放于腿上                → hand on own leg
+  双手放在单腿上            → hands on own leg
+  双手置于腿上              → hands on own legs
+  手扶脚踝                  → hand on own ankle
+  手抚小腿                  → hand on own calf
+  手放于对侧大腿            → hand on own opposite thigh
+  手置于双腿间              → hand between own legs
+  单手放膝上                → hand on lap
+  双手置于膝上              → hands on lap
+  手持腿部                  → holding own leg
+  抓着自己的脚踝            → holding own ankle
+  手抓脚踝                  → holding own ankles
+  抱腿                      → hugging own legs
+
+
+  手摸脚                    → hands on feet
+  ◆ 支撑/接触表面
+  双臂放在膝盖上            → arms on knees
+  肘撑膝                    → elbow on knee
+  单肘撑大腿                → elbow on thigh
+  手肘撑腿                  → elbows on thighs
+  手臂搭在膝盖上            → arm on knee
+  手臂搁在大腿上            → arm on thigh
+  肘部支撑                  → elbow rest
+  单手置于桌上              → hand on table
+  双臂置于桌上              → arms on table
+  单臂置于桌上              → arm on table
+
+
+
+
+
+  ◆ 腿部整体位置
+  双腿并拢                  → legs together
+  脚踝交叉                  → crossed ankles
+  折叠腿                    → legs folded
+  抬腿                      → leg up
+  伸直的腿                  → outstretched leg
+  伸腿                      → outstretched legs
+
+  ◆ 膝盖位置/屈腿
+  抬膝                      → knee up
+  屈膝                      → knees up
+  抱膝姿势                  → knees to chest
+  双膝分开双脚并拢          → knees apart feet together
+  膝盖并拢脚分开            → knees together feet apart
+
+  ◆ 站姿/特殊腿姿
+  沃森交叉腿                → watson cross
+  摩根船长姿势              → captain morgan pose
+  内八字                    → pigeon-toed
+
+  ◆ 脚部/脚踝姿态
+  踮脚尖                    → tiptoes
+  跖屈                      → plantar flexion
+  足背屈                    → dorsiflexion
+  抬脚                      → feet up
+  脚跟抬起                  → heels up
+  足底朝上                  → feet up heels up
+  绷脚尖                    → toe-point
+
+  ◆ 分腿/柔韧姿势
+  劈叉                      → split
+  坐姿一字马                → sitting split
+  站立劈叉                  → standing split
+  双腿过头                  → legs over head
+  身体柔软                  → flexible
+  直立跨坐                  → upright straddle
+
+  ◆ 地面移动
+  行进                      → marching
+  远足                      → hiking
+  蹦跳                      → skipping
+  踩踏                      → stomping
+  爬行                      → crawling
+  攀爬                      → climbing
+  速降                      → rappelling
+  追逐                      → chasing
+  绊倒                      → tripping
+  滑倒                      → slipping
+  滑行                      → sliding
+
+  ◆ 跳跃/落下
+  跳跃                      → jumping
+  单脚跳                    → hopping
+  飞扑                      → pouncing
+  着陆                      → landing
+  俯冲                      → dive
+  潜水                      → diving
+  坠落                      → falling
+  昏厥                      → fainting
+
+  ◆ 空中/漂浮
+
+  漂浮                      → floating
+  飞行                      → flying
+  半空中                    → midair
+  扇动翅膀                  → flapping
+  起飞                      → launching
+
+  ◆ 水中移动
+  游泳                      → swimming
+  自由潜水                  → freediving
+  涉水                      → wading
+  冲浪                      → surfing
+  扫帚冲浪                  → broom surfing
+  空中冲浪                  → sky surfing
+  下沉                      → sinking
+  水花四溅                  → splashing
+
+  ◆ 运动型移动
+
+  跳舞                      → dancing
+  钢管舞                    → pole dancing
+  摔跤                      → wrestling
+  溜冰_                     → skating
+  竞速                      → racing
+  滑冰                      → ice skating
+  花样滑冰                  → figure skating
+  划船                      → rowing
+  双板滑雪                  → skiing
+
+  ◆ 旋转/摆动/失衡
+  打滚                      → rolling
+  旋转                      → spinning
+  摆动                      → swinging
+  摇摆                      → swaying
+  弹跳                      → bouncing
+  挥舞手臂                  → flailing
+  摇晃                      → shaking
+  颤抖                      → trembling
+  抽搐                      → twitching
+  挣扎                      → struggling
+
+  ◆ 踢击/战斗步法
+
+  踢                        → kicking
+  挥拳                      → punching
+  高踢腿                    → high kick
+  飞踢                      → flying kick
+  踢裆                      → crotch kick
+  膝击                      → kneeing
+  踢向观众                  → kicking viewer
+
+  ◆ 踩踏/脚部互动
+  踩踏视角                  → stomping viewer
+  踩着观众                  → stepping on viewer
+  被踩                      → stepped on
+  踩人                      → standing on person
+  站在他人头上              → standing on another's head
+
+═══════════════════ 十、身体与体型 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+锁骨                      → collarbone
+腋下                      → armpits
+肚脐                      → navel
+胸口                      → chest
+腹部                      → stomach
+腰部 / 细腰               → waist / narrow waist
+臀部 / 大屁股 / 宽胯      → ass / wide hips
+大腿                      → thighs
+粗腿 / 细腿               → thick thighs / skinny legs
+膝盖                      → knees
+脖子 / 颈部               → neck
+肩膀                      → shoulders
+背部 / 露背               → back / bare back
+脚 / 手指                 → feet / fingers
+苗条 / 高挑 / 娇小        → slim / tall / petite
+丰满 / 成熟               → curvy / mature female
+巨乳 / 平胸               → large breasts / flat chest
+肌肉                      → muscular
+
+  ◆ 身体部位
+
+  中等胸部                  → medium breasts
+  尾巴                      → tail
+  角                        → horns
+  翅膀                      → wings
+  尖耳                      → pointy ears
+  光环                      → halo
+  肚子                      → stomach
+  深色皮肤                  → dark skin
+  痣                        → mole
+  兽耳绒毛                  → animal ear fluff
+  手指甲                    → fingernails
+  脚背                      → feet
+  泪痣                      → mole under eye
+  脚趾                      → toes
+  假兽耳                    → fake animal ears
+  猫尾                      → cat tail
+  异色皮肤                  → colored skin
+  衣物凸显乳头              → covered nipples
+  肚脐轮廓                  → covered navel
+  嘴唇                      → lips
+  油亮皮肤                  → shiny skin
+  脚掌                      → soles
+  狐狸尾巴                  → fox tail
+  恶魔角                    → demon horns
+  马尾巴                    → horse tail
+  腹肌                      → abs
+  脚趾甲                    → toenails
+  眉毛                      → eyebrows
+  鼻子                      → nose
+  关节                      → joints
+  手掌                      → palms
+  脚踝                      → ankle
+  小腿                      → calves
+  眼睛                      → eyes
+  双眼                      → eyes
+  一只眼                    → one eye
+  瞳孔                      → pupils
+  虹膜                      → iris
+  眼睑                      → eyelids
+  脸                        → face
+  五官                      → face
+  嘴巴                      → mouth
+  耳朵                      → ears
+  手臂                      → arms
+  手背                      → hand
+  双手                      → hands
+  一只手                    → hand
+  腰                        → waist
+  肘部                      → elbows
+
+  ◆ 状态与修饰
+
+  深肤色女性                → dark-skinned female
+  肌肉男                    → muscular male
+  深色皮肤男性              → dark-skinned male
+  日晒肤色                  → tan
+  晒痕                      → tanlines
+  肌肉女                    → muscular female
+  连体泳衣晒痕              → one-piece tan
+  肌肉手臂                  → muscular arms
+  自然弯曲                  → bent
+  张开                      → spread
+  并拢                      → together
+  伸展                      → outstretched
+  自然下垂                  → relaxed
+  清晰                      → clear
+  完整                      → complete
+  平滑                      → smooth
+
+═══════════════════ 十一、背景与环境 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+简单背景                  → simple background
+白底 / 白色背景           → white background
+灰底                      → grey background
+教室                      → classroom
+学校                      → school
+城市 / 街道               → city / street
+森林                      → forest
+海边 / 海滩               → beach
+夜空                      → night sky
+星空                      → starry sky
+室内                      → indoors
+室外                      → outdoors
+樱花                      → cherry blossoms
+天空 / 云                 → sky / cloud
+雨天 / 下雨               → rain
+雪                        → snow
+窗边                      → window
+
+  ── 补充（早期独立小节并入）──
+
+  ◆ 纯色/简洁背景
+
+  灰色背景                  → grey background
+  蓝色背景                  → blue background
+  透明背景                  → transparent background
+  粉色背景                  → pink background
+  黑色背景                  → black background
+  黄色背景                  → yellow background
+  红色背景                  → red background
+  紫色背景                  → purple background
+  绿色背景                  → green background
+  棕色背景                  → brown background
+  橙色背景                  → orange background
+  水色背景                  → aqua background
+
+  ◆ 多色/图案背景
+  菱格纹背景                → argyle background
+  棋盘格背景                → checkered background
+  彩色背景                  → colorful background
+  斜条纹背景                → diagonal-striped background
+  点状背景                  → dotted background
+  细格纹背景                → gingham background
+  渐变背景                  → gradient background
+  灰度主体彩色背景          → greyscale with colored background
+  网格背景                  → grid background
+  网点背景                  → halftone background
+  蜂巢背景                  → honeycomb background
+  蕾丝背景                  → lace background
+  单色背景                  → monochrome background
+  马赛克背景                → mosaic background
+  花纹背景                  → patterned background
+  格子背景                  → plaid background
+  波点背景                  → polka dot background
+  彩虹色背景                → rainbow background
+  螺旋背景                  → spiral background
+  飞溅背景                  → splatter background
+  条纹背景                  → striped background
+  放射状背景                → sunburst background
+  三色背景                  → three-toned background
+  双色背景                  → two-tone background
+  竖条纹背景                → vertical-striped background
+
+  ◆ 风格/媒介/构图背景
+  3D背景                    → 3d background
+  抽象背景                  → abstract background
+  AI生成背景                → ai-generated background
+  逆光                      → backlighting
+  背景融合                  → blending
+  模糊背景                  → blurry background
+  边框                      → border
+  明亮背景                  → bright background
+  Q版插入                   → chibi inset
+  暗色背景                  → dark background
+  游戏截图背景重绘          → game screenshot background
+  地平线                    → horizon
+  分格背景                  → paneled background
+  纸质背景                  → paper background
+  照片背景                  → photo background
+  背景投影                  → projected inset
+  截图背景                  → screenshot background
+  草稿背景                  → sketch background
+  签名背景墙                → step and repeat
+  水彩背景                  → watercolor background
+  缩放图层                  → zoom layer
+
+  ◆ 主题元素背景
+  动物背景                  → animal background
+  气泡背景                  → bubble background
+  蝴蝶背景                  → butterfly background
+  云朵背景                  → cloud background
+  火焰背景                  → fiery background
+  旗帜背景                  → flag background
+  花卉背景                  → floral background
+  食物主题背景              → food-themed background
+  水果背景                  → fruit background
+  心形背景                  → heart background
+  叶子背景                  → leaf background
+  闪电背景                  → lightning background
+  爪印背景                  → paw print background
+  兔子背景                  → rabbit background
+  玫瑰背景                  → rose background
+  雪花背景                  → snowflake background
+  Sofmap背景                → sofmap background
+  闪耀背景                  → sparkle background
+  星星符号背景              → star symbol background
+  星空背景                  → starry sky background
+  文字背景                  → text background
+  武器背景                  → weapon background
+
+  ◆ 室内空间
+
+  泳池                      → pool
+  卧室                      → bedroom
+  卫生间                    → bathroom
+  西式浴缸                  → bathtub
+  池畔                      → poolside
+  厨房                      → kitchen
+  舞台                      → stage
+  图书馆                    → library
+  舞台灯光                  → stage lights
+  走廊                      → hallway
+  办公室                    → office
+  体育器材室                → gym storeroom
+  健身房                    → fitness gym
+  摔角擂台                  → wrestling ring
+  凌乱的房间                → messy room
+  厕所隔间                  → toilet stall
+  桑拿                      → sauna
+  医务室                    → infirmary
+  公共厕所                  → public restroom
+  试衣间                    → fitting room
+  客厅                      → living room
+  地牢                      → dungeon
+  牢房                      → prison cell
+  衣柜                      → closet
+  学校体育馆                → school gym
+  更衣室                    → changing room / locker room
+  实验室                    → laboratory
+  拳击擂台                  → boxing ring
+  酒店客房                  → hotel room
+  宅房                      → otaku room
+  部室                      → clubroom
+  玄关                      → genkan
+  法庭                      → courtroom
+  餐厅                      → dining room / restaurant
+  宴会厅                    → ballroom
+  办公隔间                  → cubicle
+  后台                      → backstage
+  食堂                      → cafeteria
+
+  ◆ 自然地貌/植被
+
+  树                        → tree
+  自然                      → nature
+  棕榈树                    → palm tree
+  山岳                      → mountain
+  枯树                      → bare tree
+  竹子                      → bamboo
+  山丘                      → hill
+  沙漠                      → desert
+  树上                      → in tree
+  悬崖                      → cliff
+  竹林                      → bamboo forest
+  洞穴                      → cave
+  树荫                      → tree shade
+  靠树                      → against tree
+  松树                      → pine tree
+  草地                      → meadow / grass
+  丛林                      → jungle
+  火山                      → volcano
+  湿地                      → wetland
+  草原                      → grasslands
+  峡谷                      → canyon
+  稀树草原                  → savannah
+  平原                      → plain
+  冰川                      → glacier
+  废土                      → wasteland
+
+  ◆ 水域/海滨
+
+  水                        → water
+  海洋                      → ocean
+  水下                      → underwater
+  河流                      → river
+  波浪                      → waves
+  岸边                      → shore
+  湖泊                      → lake
+  瀑布                      → waterfall
+  池塘                      → pond
+  浅水                      → shallow water
+  岛屿                      → island
+  溪流                      → stream
+  浮空岛                    → floating island
+  海底                      → seafloor
+
+  ◆ 城市/道路/户外设施
+
+  楼梯                      → stairs
+  标牌                      → sign
+  栅栏                      → fence
+  道路                      → road
+  田野                      → field
+  路灯                      → lamppost
+  花田                      → flower field
+  桥                        → bridge
+  铁丝网围栏                → chain-link fence
+  交通标志                  → road sign
+  小径                      → path
+  城镇                      → town
+  小巷                      → alley
+  木栅栏                    → wooden fence
+  红绿灯                    → traffic light
+  公园长椅                  → park bench
+  人行横道                  → crosswalk
+  铁轨                      → railroad tracks
+  花园                      → garden
+  公园                      → park
+  摩天轮                    → ferris wheel
+  人行道                    → sidewalk
+  墓地                      → graveyard
+  喷泉                      → fountain
+  麦田                      → wheat field
+  栈桥                      → pier
+  塑胶跑道                  → running track
+  旋转木马                  → carousel
+  游乐园                    → amusement park
+  码头                      → dock
+  乡村                      → rural
+  摊位                      → market stall / food stand
+  村庄                      → village
+  儿童游乐场                → playground
+  稻田                      → rice paddy
+  铁路道口                  → railroad crossing
+  土路                      → dirt road
+  石板路                    → stone walkway
+  赛马场                    → horse racing track
+  电话亭                    → phone booth
+  隧道                      → tunnel
+  运河                      → canal
+  过山车                    → roller coaster
+  农场                      → farm
+  停车场                    → parking lot
+  集市                      → market
+  赛道                      → racetrack
+  木桥                      → wooden bridge
+  高速公路                  → highway
+  港口                      → harbor
+  水井                      → well
+  水上乐园                  → waterpark
+  机场跑道                  → runway
+  足球场                    → soccer field
+  战壕                      → trench
+  废料场                    → junkyard
+  空中城市                  → floating city
+
+  ◆ 建筑/商业/公共设施
+
+  建筑物                    → building
+  温泉                      → onsen
+  住宅                      → house
+  摩天大楼                  → skyscraper
+  商店                      → shop
+  塔                        → tower
+  城市灯光                  → city lights
+  酒吧                      → bar (place)
+  屋顶                      → rooftop
+  咖啡馆                    → cafe
+  火车站                    → train station
+  体育场                    → stadium
+  水族馆                    → aquarium
+  公寓                      → apartment
+  便利店                    → convenience store
+  灯塔                      → lighthouse
+  公交站                    → bus stop
+  在屋顶上                  → on roof
+  医院                      → hospital
+  风车                      → windmill / pinwheel
+  赌场                      → casino
+  电影院                    → movie theater
+  监狱                      → prison
+  游戏机厅                  → arcade
+  火车站台                  → train station platform
+  机库                      → hangar
+  温室                      → greenhouse
+  酒馆                      → tavern
+  面包房                    → bakery
+  棒球场                    → baseball stadium
+  情趣酒店                  → love hotel
+  地铁                      → subway
+  超市                      → supermarket
+  工厂                      → factory
+  工业风                    → industrial
+  机场                      → airport
+  凉亭                      → gazebo / pavilion
+  女仆咖啡厅                → maid cafe
+  谷仓                      → barn
+  舞蹈室                    → dance studio
+  漫展                      → convention
+  居酒屋                    → izakaya
+  剧院                      → theater
+  购物中心                  → mall
+  服装店                    → clothes shop
+  车库                      → garage
+  施工现场                  → construction site
+  博物馆                    → museum
+  地铁站                    → subway station
+  花店                      → flower shop
+  校门                      → school gateway
+  酒店                      → hotel
+  夜店                      → nightclub
+  简陋小屋                  → hut
+  树屋                      → treehouse
+  竞技场                    → arena
+  书店                      → bookstore
+  足汤                      → ashiyu
+  仓库                      → warehouse
+  滑冰场                    → skating rink
+  加油站                    → gas station
+  巨型结构                  → megastructure
+  马厩                      → stable
+  下水道                    → sewer
+  储物棚                    → shed
+  钟楼                      → bell tower / clock tower
+
+  ◆ 宗教/历史/特殊景观
+
+  城市景观                  → cityscape
+  建筑                      → architecture
+  东亚建筑                  → east asian architecture
+  废墟                      → ruins
+  城堡                      → castle
+  风景                      → landscape / scenery
+  王座                      → throne
+  神社                      → shrine
+  教堂                      → church
+  宝塔                      → pagoda
+  寺庙                      → temple
+  战场                      → battlefield
+  大教堂                    → cathedral
+
+  ◆ 天空/天体/宇宙
+
+  蓝天                      → blue sky
+  月亮                      → moon
+  多云天空                  → cloudy sky
+  星星                      → star (sky)
+  满月                      → full moon
+  太阳                      → sun
+  太空                      → space
+  新月                      → crescent moon
+  行星                      → planet
+  渐变色天空                → gradient sky
+  橙色天空                  → orange sky
+  流星                      → shooting star
+  灰色的天空                → grey sky
+  地球                      → earth (planet)
+  星座                      → constellation
+  红月                      → red moon
+  紫色天空                  → purple sky
+  积雨云                    → cumulonimbus cloud
+  宇航头盔                  → space helmet
+  星空印花                  → starry sky print
+  红色天空                  → red sky
+  星形面部印记              → star facial mark
+  星星项链                  → star necklace
+  星星颈圈                  → star choker
+  星座印花                  → constellation print
+  晴空                      → clear sky
+  星系                      → galaxy
+  星云                      → nebula
+  银河                      → milky way
+  小行星                    → asteroid
+  轨道上                    → in orbit
+  空间站                    → space station
+
+  ◆ 天气/大气/时间
+
+  白天                      → day
+  夜晚                      → night
+  风                        → wind
+  积雪                      → snow
+  雨                        → rain
+  日落                      → sunset
+  降雪                      → snowing
+  彩虹                      → rainbow
+  傍晚                      → evening
+  闪电                      → lightning
+  雾                        → fog
+  黄昏                      → dusk / twilight
+  日出                      → sunrise
+  早晨                      → morning
+  阴天                      → overcast
+  极光                      → aurora
+  风暴                      → storm
+  流星雨                    → meteor shower
+  暴风雪                    → blizzard
+  龙卷风                    → tornado
+  太阳雨                    → sun shower
+
+  ◆ 场景/视角总标签
+  室内向外视角              → from inside
+  从外部视角                → from outside
+  户外                      → outdoors
+
+  ◆ 交通工具内部
+  飞机客舱                  → airplane interior
+  巴士车厢内                → bus interior
+  车内                      → car interior
+  驾驶舱                    → cockpit
+  飞船内部                  → spacecraft interior
+  坦克内部                  → tank interior
+  列车车厢内部              → train interior
+  载具内景                  → vehicle interior
+
+═══════════════════ 十二、光影与氛围 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+
+  闪光                      → sparkle
+  阴影                      → shadow
+  景深                      → depth of field
+  镜头光晕                  → lens flare
+  逆光                      → backlighting
+  日落                      → sunset
+  光束                      → light rays
+  复古                      → retro artstyle
+  剪影                      → silhouette
+  投影                      → drop shadow
+  斑驳阳光                  → dappled sunlight
+  丁达尔光 / 丁达尔效应     → sunbeam
+  侧光                      → sidelighting
+  狐狸手影                  → fox shadow puppet
+  背景虚化 / 前景虚化       → bokeh / blurry foreground
+  黄昏                      → twilight
+  雾                        → fog
+  透视剪影                  → see-through silhouette
+  泛光                      → bloom
+  日出                      → sunrise
+  月光                      → moonlight
+  窗影                      → window shadow
+  彩色阴影                  → colored shadow
+  柔光 / 柔和光线           → soft lighting
+  轮廓光                    → rim light
+  电影感光线                → cinematic lighting
+  体积光                    → volumetric lighting
+  戏剧性阴影                → dramatic shadow
+  明亮 / 阳光               → bright / sunlight
+  朦胧                      → hazy
+  梦幻                      → dreamy
+  暗黑                      → dark theme
+  明快                      → vibrant
+  宁静                      → calm
+  浪漫                      → romantic
+  神秘                      → mysterious
+
+═══════════════════ 十三、画质与风格 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 20 条。
+
+
+（这些通常工作流已自动加，一般不用手写）
+
+  超高分辨率                → absurdres
+  单色                      → monochrome
+  灰度                      → greyscale
+  素描                      → sketch
+  草稿                      → sketch
+  赛璐璐 / 赛璐珞上色 / 动漫风格  → anime coloring
+  写实风格                  → realistic
+  复古画风                  → retro artstyle
+  线稿                      → lineart
+  厚涂                      → painterly
+  厚涂风格                  → painterly
+  低饱和度色彩              → muted colors
+  色彩斑斓                  → colorful
+  无线稿                    → no lineart
+  高对比 / 低饱和           → high contrast / desaturated
+  高对比度                  → high contrast
+  淡色系                    → pastel colors
+  伪复古画风                → faux retro artstyle
+  杰作 / 杰作级别           → masterpiece
+  最佳质量                  → best quality
+  细节丰富                  → highly detailed
+  精致 / 极高细节           → highly detailed / extremely detailed
+  精美                      → beautiful
+  鲜艳 / 柔和配色           → vivid colors / muted colors
+  8k                        → 8k
+  水彩                      → watercolor
+
+  ◆ 画质修饰
+  精细的                    → detailed
+  细致的                    → detailed
+  干净的                    → clean
+
+═══════════════════ 十四、NSFW分类 ═══════════════════
+说明：新增的词按 Danbooru 帖子数从高到低排；每个子类最多补 15 条。
+
+说明：这一组是成人向角色画的常用词。底模本身不受限制，
+      实际效果取决于你挂的 LoRA。
+      注意：C站 2026 年起分家，NSFW 内容在 civitai.red（不是 .com）。
+
+  ◆ 暴露程度
+
+  ※ 单写「透视」现在给 perspective（构图用的透视法）。
+    要看穿身体内部或衣服，请直接写英文 x-ray（必须带连字符，
+    xray 是 0 帖的空标签），或者用「透视」开头的复合词，如上面的两例。
+
+  开胸                      → cleavage
+  露肩                      → bare shoulders
+  内衣                      → underwear
+  内裤                      → panties
+  裸体                      → nude
+  露肚脐                    → midriff
+  马赛克                    → mosaic censoring
+  全裸                      → completely nude
+  胸罩                      → bra
+  黑条遮挡                  → bar censor
+  透明服装                  → see-through clothes
+  无修正                    → uncensored
+  下半身裸露                → bottomless
+  女性裸上身                → topless female
+  女着衣男全裸              → clothed female nude male
+  男性赤膊                  → topless male
+  露背                      → bare back
+  透视衬衫 / 透视内裤       → see-through shirt / see-through panties
+  衬衫真空                  → naked shirt
+  透视袖子                  → see-through sleeves
+  裹浴巾                    → naked towel
+  男衣女裸                  → clothed male nude female
+  走光                      → wardrobe malfunction
+  透明面纱                  → see-through veil
+  裸体丝带                  → naked ribbon
+  裸体遮挡                  → nude cover
+  透视裙                    → see-through skirt
+  裸穿夹克                  → naked jacket
+  半裸                      → semi-nude
+  暴露 / 露出               → skimpy / exposed
+
+  ◆ 乳房
+
+  乳房                      → breasts
+  胸部                      → breasts
+  巨乳                      → large breasts
+  乳沟                      → cleavage
+  乳头                      → nipples
+  贫乳                      → small breasts
+  胸部镂空                  → cleavage cutout
+  巨乳化                    → alternate breast size (larger)
+  抓揉他人乳房              → grabbing another's breast
+  双乳露出                  → breasts out
+  胸部挤压                  → breast press
+  乳间夹物                  → between breasts
+  乳房间距宽                → breasts apart
+  乳痣                      → mole on breast
+  胸部精液                  → cum on breasts
+  肿胀乳头                  → puffy nipples
+  大乳晕                    → large areolae
+  乳摇                      → bouncing breasts
+  乳头刺激                  → nipple stimulation
+  挤乳                      → breasts squeezed together
+  胸袋                      → breast pocket
+  乳晕                      → areolae
+  挺拔                      → perky breasts
+  下垂                      → drooping
+  美乳                      → beautiful breasts
+
+  ◆ 性器
+
+  阴茎                      → penis
+  阴部                      → pussy
+  小穴                      → pussy
+  私处                      → pussy
+  阴道口                    → vaginal
+  肛门                      → anus
+  阴道内射                  → cum in pussy
+  睾丸                      → testicles
+  巨根                      → large penis
+  青筋阴茎                  → veiny penis
+  掰开阴部                  → spread pussy
+  阴蒂                      → clitoris
+  淫纹                      → pubic tattoo
+  舔舐阴茎                  → licking penis
+  包皮                      → foreskin
+  注视阴茎                  → looking at penis
+  会阴                      → perineum
+  离体阴茎                  → disembodied penis
+  兽茎                      → animal penis
+  阴部微露                  → pussy peek
+  尿道                      → urethra
+  阴茎在脸上                → penis on face
+  阴道                      → vagina
+  阴唇                      → labia
+  生殖器                    → genitals
+
+  ◆ 体液与状态
+
+  脸红                      → blush
+  出汗                      → sweat
+  精液                      → cum
+  湿润 / 潮湿               → wet
+  爱液                      → pussy juice
+  唾液                      → saliva
+  体表精液                  → cum on body
+  流口水                    → drooling
+  失神                      → empty eyes
+  口内射精                  → cum in mouth
+  精液溢出                  → cum overflow
+  唾液拉丝                  → saliva trail
+  泌乳                      → lactation
+  前列腺液                  → precum
+  湿衬衫                    → wet shirt
+  肛内射精                  → cum in ass
+  衣物上的精液              → cum on clothes
+  衣下勃起                  → erection under clothes
+  女性高潮                  → female orgasm
+  精液拉丝                  → cum string
+  喷射精液                  → projectile cum
+  屁股上的精液              → cum on ass
+  喘息 / 娇喘               → huffing
+  黏液                      → mucus
+  陶醉                      → swoon
+
+  ◆ 性行为
+
+  性交                      → sex
+  抽插                      → sex
+  面部印记                  → facial mark
+  勃起                      → erection
+  口交                      → oral
+  群交                      → group sex
+  性玩具                    → sex toy
+  肛交                      → anal
+  射精                      → ejaculation
+  颜射                      → facial
+  乳交                      → paizuri
+  着衣性行为                → clothed sex
+  手交                      → handjob
+  事后                      → after sex
+  自慰                      → masturbation
+  指交                      → fingering
+  女性自慰                  → female masturbation
+  阴道性交后                → after vaginal
+  高潮                      → orgasm
+  面部纹身                  → facial tattoo
+  愉悦性爱                  → happy sex
+  即将插入                  → imminent penetration
+  肛门异物插入              → anal object insertion
+  两女一男三人行            → ffm threesome
+  两男一女三人行            → mmf threesome
+  舔阴                      → cunnilingus
+  潮吹                      → female ejaculation
+  足交                      → footjob
+  深喉                      → deepthroat
+  插入                      → penetration
+  内射 / 中出               → creampie
+
+  ◆ 姿势体位
+
+  张开双腿                  → spread legs
+  背对 / 背对镜头           → from behind
+  跪姿                      → kneeling
+  抬腿                      → leg up
+  跨坐                      → straddling
+  趴着                      → on stomach
+  屈膝                      → knees up
+  骑乘位                    → cowgirl position
+  正常位                    → missionary
+  抬起双腿                  → legs up
+  后入 / 后背位             → doggystyle
+  背后拥抱                  → hug from behind
+  背后抓取                  → grabbing from behind
+  骑乘                      → riding
+  站立位                    → standing sex
+  背面骑乘位                → reverse cowgirl position
+  骑扫帚                    → broom riding
+  双腿大开                  → wide spread legs
+  骑乘压制                  → mating press
+  马鞭                      → riding crop
+  骑马                      → horseback riding
+  腹部伤疤                  → scar on stomach
+  侧位                      → spooning
+  面对面                    → face to face
+
+  ◆ 亲密动作
+
+  拥抱                      → hug
+  牵手                      → holding hands
+  亲吻 / 接吻               → kiss
+  舌吻                      → french kiss
+  即将接吻                  → imminent kiss
+  膝枕                      → lap pillow
+  抱枕                      → pillow hug
+  挽臂                      → arm hug
+  亲吻后                    → after kiss
+  依偎                      → cuddling
+  飞吻                      → blowing kiss
+  惊喜之吻                  → surprise kiss
+  拥抱动物                  → animal hug
+
+  ◆ 二次元表情（成人向常用）
+
+  张嘴                      → open mouth
+  半睁眼                    → half-closed eyes
+  害羞                      → embarrassed
+  愉快 / 愉悦               → happy / pleasure
+  吐舌                      → :p
+  舔唇 / 舔嘴唇             → :q / licking lips
+  得意                      → smug
+  阿黑颜                    → ahegao
+  翻白眼                    → rolling eyes
+  眨眼                      → blinking
+  失神脸                    → torogao
+  陶醉的表情                → swoon
+  媚眼                      → wink
+  咬唇                      → biting lip
+
+  ◆ 体型（成人向常用）
+
+  锁骨                      → collarbone
+  腋下                      → armpits
+  丰满                      → curvy
+  成熟                      → mature female
+  长腿                      → long legs
+  细腰                      → narrow waist
+  锁骨显露                  → covered collarbone
+  腋下出汗                  → sweaty armpits
+  翘臀                      → bootie
+  大腿内侧                  → inner thigh
+
+═══════════════════ 十五、局部重绘（修图） ═══════════════════
+给「修图」面板用。结论来自实测对照，不是社区传闻。
+
+【三条原则】
+  1. 蒙版里要写「画什么」
+     只给质量词会生成一块无意义色块。写了内容才正常重画。
+  2. 提示词只描述蒙版内的东西
+     把整图的角色/场景抄进来会分散 attention，让重绘区往那些概念漂。
+  3. 负向是修伪影的主力，不是正向
+     出现多余手指/糊掉/不匹配的元素，往负向加词去抵消，别往正向堆。
+
+【改动幅度怎么选】按「部位当前状态」，不按部位
+  ★ 部位本来就画对时用 0.8 会改坏：手指变尖、鞋子变色
+  0.30–0.45   基本正确，只想微调颜色/表情
+  0.45–0.55   有小瑕疵，修结构（修手指数量、修眼睛）← 修图最常用
+  0.55–0.70   明显崩坏
+  0.70–0.90   完全失败，推倒重来
+  0.90–1.00   只保留构图
+
+【蒙版两个参数】
+  向外扩张   绝不能设 0 —— 实测边界跳变 47.75（正常 5.3），会出现硬边
+             修脸/修手 12–20 ／ 修眼睛这类小区域 4–8
+  边缘融合   实测 12/24/48 结果几乎相同，保持 12 不用调
+
+【专用模型影响强度】
+  0.7–0.9   保持原结构的推荐区间
+  0.4–0.6   想大幅改造（再高会锁死结构，实测 0.75 和 0.90 几乎一样）
+  不开专用模型：修眼睛会把瞳色改紫、虹膜纹理糊掉。一定要开。
+
+【融合方式】
+  默认「直接贴回」最保真，颜色不会跑。
+  只有重绘区明显色偏（泛绿/泛黄）才换 Poisson。
+
+【为什么颜色一定会变一点】
+  纯 VAE 编解码（不重绘不采样）就有 RGB 平均差 1.16/255、最大 31/255。
+  这是 latent 补绘的物理下限，参数消不掉。
+
+【正向模板】
+  修结构（最常用）：<部位具体描述>, masterpiece, best quality
+    修手：hand, five fingers, detailed hand, masterpiece, best quality
+    修脚：feet, detailed feet, five toes, toes, masterpiece, best quality
+    修眼：eyes, detailed eyes, <原瞳色>, masterpiece, best quality
+  换属性：<目标>, 其余不变    并在负向写「原来的状态」抵消惯性
+    改发色 → 正向 blue hair ／ 负向 green hair, blonde hair
+  只清瑕疵：clean, detailed, smooth, masterpiece, best quality
+
+【负向模板】（2026-09-16 逐条查帖数重写，无效的已换成有效的）
+  手：fewer digits(6230), extra digits(534), bad hands(3367), missing finger(160)
+  脚：bad feet(3901)
+      ※ 原来写的 extra toes(7) / fewer toes(查无) / fused toes(查无) 全不能用
+  眼：extra pupils(1271)
+      ※ 原来写的 bad eyes / asymmetric eyes / dead eyes 三个都查无此名；
+        眼睛的问题靠正向描述 + 专用重绘模型，负向基本指望不上
+  通用：watermark(24.6万), jpeg artifacts(2.7万), blurry(31.2万), out of frame(4.4万)
+      ※ text(0帖) 用 english text(41.3万)；extra limbs(0帖) 查无有效替代
+  缺肢/缺指（追加）：missing finger(160), amputee(10860)
+
+【排查】
+  颜色变了 → 先改「直接贴回」，再动改动幅度
+  形状变了 → 降改动幅度到 0.45–0.55，不要用 0.8
+
+【六种部位的推荐组合】
+  部位     提示词                                  改动幅度 / 向外扩张
+  ────────────────────────────────────────────────────────────────────
+  手       hands, detailed, fingers, natural hands   0.8（崩坏时）/ 12
+  脚       feet, toes, detailed, bare feet           0.8 / 14
+  眼睛     eyes, pupils, detailed eyes, <瞳色>        0.55 / 6
+  头发     hair, detailed hair, long hair            0.8 / 10
+  乳房     breasts, nipples, areolae                 0.8 / 10
+  阴部     pussy, labia, uncensored, spread pussy    0.9 / 8
+  统一：专用模型 开 ／ 强度 0.8 ／ 边缘融合 12 ／ 融合方式 直接贴回
+
+【部位词对照（中文可直接输入）】
+  手 → hands        脚 → feet         眼睛 → eyes       头发 → hair
+  手指 → fingers    脚趾 → toes       瞳孔 → pupils     发梢 → hair tips
+  手腕 → wrist      脚踝 → ankle      虹膜 → iris       发饰 → hair ornament
+  乳房 → breasts    阴道 → vagina     阴唇 → labia      阴蒂 → clitoris
+  乳头 → nipples    乳晕 → areolae    阴部 → pussy      肛门 → anus
+  精细 → detailed   清晰 → clear      自然 → natural    对称 → symmetry
+
+【★ 容易写错的部位词（2026-09-16 逐条用帖数重新核对过）】
+  想表达的          推荐标签（有效）        帖数      错误写法（不存在 / 空标签，别用）
+  ────────────────────────────────────────────────────────────────────────────
+  手指过多          fewer digits           6,230     extra fingers（0 帖空标签）
+  手指过少          fewer digits           6,230     missing fingers（0 帖空标签）
+  多指 / 多趾        extra digits             534     extra digit
+  断指              missing finger           160     missing fingers（复数不存在）
+  缺肢              amputee               10,860     missing limbs / extra limbs
+  手部崩坏          bad hands              3,367     mutated hands（查无此名）
+  手画得差          bad hands              3,367     poorly drawn hands（查无此名）
+  手部特写          hand focus             2,813     hand closeup
+  比心（爱心手势）    heart hands           41,162     hand on face  ★
+  双手比心          double finger heart      332     —
+  单手比心          half-heart hands       1,776     —
+  手指比心          finger heart           3,960     —
+  四指比心          four-finger heart hands 10,445    —
+  手放脸旁          hand on own face      73,413     hand on face  ★
+  手托脸颊          hand on own cheek     37,672     hand on cheek
+  手扶脸            hand on own face      73,413     touching face
+
+  ★ hand on face 在 Danbooru 里不存在。「手放脸旁」是 hand on own face，
+    「比心」是 heart hands —— 两个不同动作，早期版本错误地映射成同一个值。
+
+  ⚠ too many fingers 降级说明（2026-09-16 实测）：
+    这个词曾经被本表当作「手指过多」的正确写法，实测**只有 20 帖，
+    线上精确比对是 0 帖**，属近死标签，效力很弱。
+    同义的 fewer digits(6230) / extra digits(534) 才是有效的。
+    它仍留在界面默认负向词里（按「只添不删」策略保留），
+    但你**自己手写负向词时优先用 fewer digits / extra digits**。
+
+【负向里要写「手指异常」】
+  优先写：fewer digits, extra digits, bad hands
+  可补：  missing finger, amputee
+  别写：  extra fingers / missing fingers（0 帖空标签）
+          mutated hands / poorly drawn hands / fused fingers（查无此名）
+          too many fingers（20 帖，效力弱，留着无害但别指望它）
+
+  ◆ 修复用语
+  修                        → detailed
+  修复                      → detailed
+  重画                      → detailed
+  修手                      → hands, detailed
+  修脚                      → feet, detailed
+  修脸                      → face, detailed
+  修眼                      → eyes, detailed
+
+═══════════════════ 十六、通用质量词（正向/负向） ═══════════════════
+
+★ 先说结论
+  真正「通用」的只有负向词。正向质量词要看你用的底模 —— 当前底模
+  （RIN Flanime Illustrious v5.0）作者只推荐 masterpiece, best quality。
+
+【正向：词库里真实存在的】
+  写明可用（Danbooru 原生标签，模型训练时见过）：
+  masterpiece              杰作级        → masterpiece
+  best quality             最佳质量      → best quality
+  highres                  高分辨率      → highres
+  absurdres                超高分辨率    → absurdres
+  detailed                 细节丰富      → detailed
+  extremely detailed       极致细节      → extremely detailed
+  highly detailed          高细节        → highly detailed
+  official art             官方画风      → official art
+  anime screenshot         动画截图      → anime screenshot
+
+【正向：词库里不存在的（社区俗称，谨慎用）】
+  very aesthetic / amazing quality / ultra detailed / 8k / sharp focus /
+  trending on artstation / award winning
+  这些**不是 Danbooru 标签**。CLIP 仍能理解英文短语，所以不是完全无效，
+  但它们占 token 预算却不命中模型学过的明确含义。
+  当前底模作者只推荐 2 个正向词，加多了可能与它的训练分布背离。
+
+  ★ 建议：正向只写 masterpiece, best quality（界面已默认勾选这两个）
+
+【负向：词库里真实存在的（可放心用）】
+  lowres                   低分辨率      → lowres
+  bad anatomy              解剖错误      → bad anatomy
+  bad hands                手部错误      → bad hands
+  bad proportions          比例错误      → bad proportions
+  extra digits             多余手指      → extra digits
+  fewer digits             手指过少      → fewer digits
+  extra arms               多余手臂      → extra arms
+  long neck                脖子过长      → long neck
+  blurry                   模糊          → blurry
+  jpeg artifacts           压缩噪点      → jpeg artifacts
+  watermark                水印          → watermark
+  signature                签名          → signature
+  username                 用户名        → username
+  artist name              画师名        → artist name
+  cropped                  被裁切        → cropped
+  out of frame             出画          → out of frame
+
+【负向：避免画面出现文字（已加进默认档）】
+  社区最常写的那个 text，在 Danbooru 上是**明令禁用**的标签。官方 wiki 原文：
+      Do not use this tag. The mere fact that text is visible is not
+      tagged on Danbooru.
+  实测 post_count = 0，本地 328k 词库里也没有它 —— 写 text 等于空转。
+  下面这组取自官方的 tag group:text，逐条核实过真实存在、帖数够大：
+
+      english text     英文文本   413k   ← 新增
+      speech bubble    对话框     527k   ← 新增
+      artist name      作者名     627k   ← 新增
+      web address      网址        70k   ← 新增
+      translated       已翻译     653k   ← 新增（画面被嵌了译文，中文圈最常见）
+      hard-translated  硬嵌字幕   7.1k   ← 新增（对白被烧进画面）
+      signature        签名       444k   ← 默认档里本来就有
+      watermark        水印       246k   ← 默认档里本来就有
+
+  ★ 为什么不用「乱码」那两个词：
+      mojibake text（乱码文本）只有 104 帖，gibberish text（乱码文字）92 帖。
+      它们字面上才是「乱码」，但帖数太低，模型没有对应表征，
+      写了等于塞个陌生词。而画面上的乱码本来就是 english text 渲染失败的
+      产物 —— 压住上面这组，乱码跟着少。
+
+【负向：缺手指 / 缺肢（2026-09-16 追加）】
+  社区常写的 missing fingers / extra fingers 在 Danbooru 上**存在但是 0 帖**
+  （空标签）；mutated hands / fused fingers / missing limbs / extra limbs
+  **根本不存在**。想要的意思用这些真标签表达：
+
+      fewer digits     少指      6,230 帖   ← 本来就在默认档
+      extra digits     多指/多趾    534 帖   ← 本来就在默认档
+      missing finger   断指        160 帖   ← 新增（注意是**单数**，
+                                             missing fingers 复数词库里没有）
+      amputee          截肢者   10,860 帖   ← 新增（缺肢整段，不是单指）
+      too many fingers 手指过多     20 帖   ← 本来就在，属空转词但保留
+
+  ★ 默认档维护策略：只添不删。
+
+  想再加就自己挑，下面这些也都核实过真实存在：
+      chinese text / korean text / thought bubble / sound effects /
+      logo / copyright name / character name / dated / name tag /
+      clothes writing / text background / foreground text /
+      twitter username / patreon username / text focus
+  注意：默认档里的 username 只有 94 帖，基本是个死标签，写了没坏处但也没用。
+
+【负向：词库里不存在的（社区常传，实际无对应标签）】
+  worst quality / low quality / worst detail / bad quality /
+  mutated hands / extra fingers / fused fingers / extra limbs /
+  malformed limbs / missing fingers / poorly drawn hands
+
+  ★ 本项目当前的默认负向词 = 底模作者原文 + 上面「真实存在」的那组
+    + 「避免画面出现文字」的那组，界面里叫「通用（推荐）」（默认选中）。
+
+  ★ 默认负向词的维护策略（2026-09-16 定）：**只添不删**。
+    依据：正向与负向各有独立的 77 token 窗口，负向词不挤占正向空间，
+    多几个无效词没有实际代价；而删词会改掉已经用惯的默认行为。
+    所以下面这些「空转词」一律保留，不再提议清理：
+        bad quality / worst quality / worst detail / too many toes   （作者原文，本无对应标签）
+        too many fingers  （20 帖）      username  （94 帖）
+
+【token 预算提醒 —— 2026-09-16 用 ComfyUI 自带 tokenizer 实测重写】
+  SDXL 每个 CLIP 编码器 77 个位置（CLIP-L 和 CLIP-G 各一套）。
+  ★ 结论：**写长了不会丢词，正负向也不互相挤占**。三处都实测过：
+    1) 正负极隔离：server.py 里是两个独立 CLIPTextEncode（L1007-1012），
+       全图没有任何 ConditioningConcat / ConditioningCombine /
+       ConditioningAverage；两者只在 ControlNetApplyAdvanced 与 KSampler
+       处成对传入，从不合并。
+    2) 超 77 不是截断，是分块：comfy/sd1_clip.py 的 tokenize_with_weights
+       按 77 切开，process_tokens 把每块当 batch 单独编码，最后
+       ClipTokenWeightEncoder.encode_token_weights（L68）用
+       torch.cat(output, dim=-2) 沿序列维度拼回去 —— 一块不丢。
+       实测：负向复制 8 遍 = 8 块，末尾内容完整保留。
+    3) SDXL 唯一会「按短的切齐」的地方在 sdxl_clip.py：
+       cut_to = min(l_out.shape[1], g_out.shape[1])。
+       实测 clip_l 与 clip_g 对同一文本块数永远相同（8 遍也是 8:8），
+       不会切掉内容。
+  实测占用（CLIPTokenizer 计数，含 BOS/EOS）：
+      正向  最小 11 / 典型 25 / 较长 67 token
+      负向  改动前 58 / 现在 76 token —— 都还是 1 块
+  ⇒ 想加负向词就加，不必为了 token 删词。
+  ⚠ 没测过、不下结论的部分：分块后每块的位置编码都从 0 重新开始（CLIP 只有 77 个
+    位置嵌入），第 78 个 token 往后的「相对位置」信息是丢的。这对出图效果影响多大，
+    本项目没做过对照实验。所以「质量词别堆太多」这条经验仍然成立，
+    但理由是效果层面，不是「会被截断」。
+
+【负向词真的有用吗 —— 本项目实测】
+  做过对照：基础负向 + 真实修复词 vs 基础负向 + 同长度乱码词，
+  两者对输出的影响几乎一样（42.89 vs 45.57）。
+  说明负向词的作用主要来自「占据了 token 改变了采样轨迹」，
+  而不是语义上精确地消除了某个东西。
+  结论：负向词要写，但不必写长；靠蒙版重绘 + 专用模型修结构更有效。
+
+
+═══════════════════ 十七、其余提示词要点 ═══════════════════
+（原「负向提示词」内容已并入「通用质量词」一章，此处保留与负向词相关的实操要点）
+
+负向词的作用方式（本项目实测）：
+  基础负向 + 真实修复词  → 与基线差异 42.89
+  基础负向 + 同长度乱码词 → 与基线差异 45.57
+  两者几乎一样 ⇒ 负向词主要靠「占 token 改变采样轨迹」生效，
+  不是语义上精确消除某个东西。所以要写，但不必写长。
+
+修结构靠什么（按有效性排序）：
+  1. 蒙版局部重绘 + 专用 Inpainting 模型   ← 最有效
+  2. 降改动幅度、调融合方式
+  3. 解剖类 LoRA（手脚解剖修复）
+  4. 负向词                                ← 最弱
+
+
+═══════════════════ 十八、权重语法（进阶） ═══════════════════
+⚠ 本节 2026-09-16 全部实测重写。原来说的 `(blue hair:1.3)` 在本程序里
+  **根本不能用**：翻译器会把 `:` 和 `(` 当非法字符拆开，提示词直接变垃圾
+  （只剩 `(flat` 这种碎片）。下面是唯一验证过能用的写法。
+
+【唯一可用的写法：英文标签 + 多层括号】
+    ((flat color))          → 1.21
+    (((flat color)))        → 1.331
+    ((((flat color))))      → 1.4641
+    (((((flat color)))))    → 1.61051
+
+  每多包一层括号 ×1.1。想要更高就继续加层，没有上限写法。
+  这是 ComfyUI 的 A1111 兼容语法，本程序会把这串英文**原样透传**。
+
+【四条硬性规则】
+  1. 括号里必须是**英文**。中文包进去会被吃掉：
+         ((平涂))   →  实际只得到 flat color，权重还是 1.0，等于白写
+     正确写法：((flat color))
+  2. **不能用 `:` 指定精确权重**。ComfyUI 本身支持 (tag:1.4)，但本程序的
+     翻译器会把它拆碎。想要 1.4 做不到，只能用 1.331 或 1.4641 这种档位。
+  3. **不能用 `*`**。((flat color)*1.3) 会坏成 ((flat。
+  4. **加权词必须用逗号和其他词隔开，不能只靠空格**。
+     一个括号里只放一个标签；要加权两个就写两组括号。
+     对错例子见下面的对照表。
+
+【中文和英文混写是可以的】
+  中文照常写，只有**要加权的那个词**写成英文括号形式，中间用逗号隔开。
+  下面「你写的」和「实际得到」成对看（这几行故意不用箭头，免得被
+  词表自检脚本当成「中文词条映射」去逐条核对）：
+
+      你写的                              实际得到的英文
+      ──────────────────────────────────────────────────────────────
+      少女, ((flat color)), 微笑            1girl, ((flat color)), smile
+      少女, (((flat color))), 微笑, 银发      1girl, (((flat color))), smile, silver hair
+      平涂, ((anime coloring))            flat color, ((anime coloring))
+      少女, ((flat color)), ((anime coloring)), 微笑
+                                        1girl, ((flat color)), ((anime coloring)), smile
+      少女 ((flat color)) 微笑  ← 只用空格  1girl, ((flat, color)), smile
+                                        ✗ 括号里被插进了逗号，坏了
+
+【只增不减】
+  括号只能加强。想**减弱**某个词，本程序没有可用写法 ——
+  改用别的办法：把它从正向删掉，或写进负向提示词。
+
+【实测对照表】
+  你写的                        结果
+  ((flat color))               1.21                        ✅
+  (((flat color)))             1.331                       ✅
+  ((blurry))                   1.21                        ✅ 单词标签也行
+  ((cropped))                  1.21                        ✅ 负向词同样有效
+  1girl, ((flat color)), solo  正常，flat color = 1.21       ✅
+  少女, ((flat color)), 微笑     正常                         ✅
+  ((平涂))                      flat color，权重 1.0         ❌ 括号被吃
+  (flat color:1.4)             (flat，垃圾                  ❌
+  ((flat_color:1.4))           空，整段丢弃                 ❌
+  ((flat color)*1.3)           ((flat，垃圾                 ❌
+  ((flat color)                1.1（括号没闭合，别这么写）    ⚠
+
+【什么时候值得用】
+  提示词被 LoRA 压住时。但要说清楚原理，免得白费力气：
+  LoRA 改的是**模型权重**，提示词改的是**条件引导**，两者不在一个层级。
+  加括号能帮上忙，但上限不高。
+  真要对抗 LoRA，用同层级的武器更有效 —— 挂一个画风 LoRA 去对冲。
+
+
+═══════════════════ 十九、参数速查 ═══════════════════
+参数        默认    建议范围        说明
+seed        随机    任意            换图首选
+steps       30      20–40           甜点 30，超过 35 收益极小
+cfg         5.5     3–7             Illustrious 推荐 3–7；太高过饱和、发灰
+sampler     dpmpp_2m                作者推荐，细节强
+scheduler   karras                  作者推荐搭配 dpmpp_2m，对比度更高
+denoise     1.0     图生图 0.3–0.7  越低越像原图
+分辨率       1024×1024 见下          界面里是「画面比例」预设，不用自己配宽高
+
+常见问题
+    图糊、细节少        → steps 调到 32；负向加 blurry
+    不听提示词          → cfg 调到 7；关键词往前挪
+    画面太艳            → cfg 降到 5–5.5
+    每张都很像          → 换 seed；多换几个标签
+    显存不够            → 分辨率降到 768；关掉草图/参考图
+
+
+═══════════════════ 二十、LoRA使用要点 ═══════════════════
+【触发词怎么工作】
+    角色类 LoRA 必须写触发词才会生效，否则等于没挂。
+    程序会从 LoRA 文件自带的训练元数据（kohya 的 ss_tag_frequency）
+    里自动读出触发词，并自动加进正向提示词，不用你手写。
+    UI 里每个 LoRA 下方会显示它的触发词是什么。
+
+    画质增强类 LoRA 通常没有触发词 —— 挂上即生效，靠权重调节。
+    （本机的 add_detail 就是这种，它没有任何元数据）
+
+【权重】
+    类型              权重        说明
+    角色 / 概念       0.7–0.9     让模型认识特定人物
+    画风              0.6–0.8     迁移画师/作品风格
+    画质增强          0.5–0.8     提升细节
+    多 LoRA 叠加       各 0.4–0.6   最多 3 个，超过基本是负收益
+
+【兼容】
+    LoRA 与底模绑定。基于 Illustrious 训练的只能配 Illustrious 系底模，
+    丢进 SDXL-Turbo 或 Pony 会崩坏或完全无效。下载前先看页面的「底模」标注。
+
+
+═══════════════════ 二十一、手动放大 ═══════════════════
+UI 右侧「最近产出」面板，每张图左下角有「放大」按钮。
+
+推荐流程：
+    生成 → 看效果 → 不满意就换 seed 重生成 → 满意了再点放大
+
+放大倍数可选 1.5× / 2× / 3× / 4×，默认 2×（640→1280 约 6 秒）。
+
+为什么不用直接生成 2K？
+    直接生成 2048 需要约 100 秒，而 1024 生成 + 放大到 2048 只要 30 秒左右。
+
+
+═══════════════════ 二十二、无法直接翻译的条目 ═══════════════════
+  专名/造型名，没有可用的英文对应标签。仅作记录，不要写进提示词。
+
+  西川贵教造型              → hot limit
