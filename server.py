@@ -43,6 +43,14 @@ from paths import (  # noqa: E402
     COMFY_INPUT, COMFY_OUTPUT, COMFY_URL, MODELS_DIR, OUT_ANIME, OUT_DEPTH,
     RECYCLE_DIR, TAG_DB, VOCAB,  # noqa: F401
 )
+# ★ 同时 import **模块本身**（不只是里面的常量）。
+#   为什么必须两个都要：`from paths import X` 是把 X 的**当时那个值**抄进来，
+#   之后 paths 里再改它，这里看到的还是旧的。而有一条判据要在**启动之后**
+#   才能算出来（产出目录里有没有出图记录 —— 那个目录是启动时才建好的），
+#   算出来要写回 paths.CONFIG_ERROR，接口得读到**新的**那个值。
+#   踩点：这条判据第一次写完，接口返回的仍是上次 import 时抄下来的 None，
+#   界面上什么都没显示 —— 换个写法还得靠这一行。
+import paths as APPATHS  # noqa: E402
 
 COMFY = COMFY_URL
 # 正向质量词。Illustrious 系通用（官方 v0.1 / v1.x / v2.0 和它的各种 finetune
@@ -1479,12 +1487,18 @@ def capabilities() -> dict:
         # 另一个目录跑起来的实例（路径配置不同），然后报一堆和被测代码无关的
         # 失败。见 tests/test_server_guard.py。
         "app_dir": APP_DIR,
-        # config.json 坏了的时候，这里是一句给用户看的原因（否则为 None）。
-        # 为什么要报到界面上：坏掉的 config 会静默回退成"自动探测"，用户填的
+        # config.json 有问题的时候，这里是一句给用户看的原因（否则为 None）。
+        # 为什么报到界面上：坏掉的 config 会静默回退成"自动探测"，用户填的
         # 产出目录整份失效、图跑到别处，而他**看不出任何异常**。服务端那行
         # [warn] 在黑窗口里一闪就过去了，所以必须有一条走到界面上。
         # 见 paths.CONFIG_ERROR 和 dev/probe_broken_config.py。
-        "config_error": CONFIG_ERROR,
+        #
+        # ★ 读 `APPATHS.CONFIG_ERROR`（模块属性）而**不是**上面 import 进来的
+        #   那个 `CONFIG_ERROR`：后者是 import 那一刻抄下来的值，而"config.json
+        #   不见了"这条判据要到**启动时**才算得出来（要看产出目录里有没有出图），
+        #   写回的是 paths 里的那个变量。用抄来的值的话，界面上什么都不显示 ——
+        #   而且这正好是最该显示的那一种。
+        "config_error": APPATHS.CONFIG_ERROR,
         "checkpoint": CHECKPOINT if CHECKPOINT in ckpts else (ckpts[0] if ckpts else None),
         "checkpoints": ckpts,
         "vaes": vaes,
@@ -3713,6 +3727,15 @@ def main() -> int:
             open_browser = False
 
     os.makedirs(OUT_ANIME, exist_ok=True)
+
+    # ★ 收口判据：config.json 不在，但这台机器用过这个应用吗？
+    #   必须排在 `os.makedirs(OUT_ANIME)` **之后** —— 这条判据要看的就是
+    #   产出目录里有没有出图的日期文件夹。写在前面的话，首次启动刚建出来的
+    #   空目录会让它判成"没用过"，看着也对；但顺序反了就会变成"永远判没用过"，
+    #   而这正是它要抓的那种静默失败。
+    #   顺带：它一设就把提示打到 stderr，界面上再从 /api/capabilities 读到同一句。
+    APPATHS.note_config_gone_if_used()
+
     srv, port = bind_server(port)
     url = f"http://127.0.0.1:{port}/"
     print("=" * 62)

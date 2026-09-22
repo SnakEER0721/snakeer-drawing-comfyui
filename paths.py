@@ -79,9 +79,62 @@ def tests_path(name: str) -> str:
 #   三种都会走到这条路。这正是这个项目最忌讳的「静默失败」。
 CONFIG_ERROR = None
 
+# config.json **根本不在**（不是"坏了"）。同样为 None 的 CONFIG_ERROR 分不清这两种，
+# 而它们的处理方式不同：文件在但坏了 → 直接报；文件不在 → 还要判是不是首次运行。
+CONFIG_WAS_MISSING = False
+
+
+# 默认底模。空 = 用下面这个兜底名，check_env.py 会告诉你装没装。
+#
+# ★ 兜底名必须和 README 让用户装的那个模型一致。
+#   这一条踩过：更早的默认底模写的是 "Illustrious-XL-v2.0.safetensors"，
+#   而 README 的模型清单和 install_models.py 装的是另一个名字 ——
+#   于是**全新安装的用户明明装对了，check_env.py 却报"找不到底模"**，
+#   而且报的是一个他从来没听说过的文件名。
+#   正常流程里 config.json 会被 安装模型.bat 写好，但"没有 config.json"
+#   恰恰是新装用户的默认状态，所以这个兜底值是真会被用到的。
+#   当前默认 = Illustrious-XL 官方 v2.0（= install_models.MODELS 里的第一条，
+#   两处必须一致；dev/audit_release.py 会核对发布包的 config.example.json）。
+#
+#   ★ 放在这么靠前是**必须的**，不是随手放的：`_load_config()` 在模块中段就
+#     被调用，它那条"config.json 不见了"的提示里要写出这个文件名 ——
+#     定义太靠后就会在 import 期抛 `NameError`（服务起不来）。
+FALLBACK_CHECKPOINT = "Illustrious-XL-v2.0.safetensors"
+
+
+def _config_was_deleted() -> bool:
+    """config.json 不在了 —— 但这台机器**已经用过这个应用**了吗？
+
+    ★ 为什么必须问这一句（09-22 实测踩到）：
+      打包器的 `--clean` 曾经把发布目录里的 `config.json` 一起铲掉，
+      于是服务的 `FileNotFoundError` 分支把它当成「首次运行」静默放行 ——
+      `CHECKPOINT` 退回写死的 `Illustrious-XL-v2.0.safetensors`，
+      **界面上一个提示都没有**。用户以为在用自己挑的底模，其实没有。
+      这不是"配置坏了"，是"配置没了"，而原来的代码只能认出前一种。
+
+    判据只能落在**服务自己留下的、用户不会去动的东西**上：
+      ① `_provenance.json` —— 出图时自动写的溯源记录
+      ② `lora_aliases.json` / `custom_prompt_options.json` —— 用户在界面里配的
+     `说明.txt` 不行：它是发布包自带的，"在"证明不了任何事。
+
+    这个函数是 `note_config_gone_if_used()` 的**第一半**（import 期就能查的那半）：
+    它只看得见模块前段的路径常量。第四条物证"产出目录里已经有出图"依赖
+    `OUT_ANIME`，排在文件后半段，import 期还不存在 —— 那半在
+    `_output_dir_has_shoots()` 里，同样由收口函数调用。
+
+    踩点：第一版直接在函数体里写 `os.listdir(OUT_ANIME)`，看着没事
+    （函数体是调用时才解析名字）—— 但**这个函数就是在 import 期被调用的**，
+    于是"配置没了"这条分支第一次真的被执行时抛 `NameError`，
+    **症状是服务根本起不来**，而不是某个功能不对。
+    """
+    for p in (PROVENANCE, LORA_ALIASES, CUSTOM_PROMPT_OPTIONS):
+        if os.path.isfile(p):
+            return True
+    return False
+
 
 def _load_config() -> dict:
-    """读 config.json。不存在是正常情况（首次运行），不报错。
+    """读 config.json。不存在时要分清「首次运行」和「配置没了」。
 
     ★ 编码用 **utf-8-sig**：带 BOM 的 UTF-8 也要认。
       Windows 上不少编辑器存 UTF-8 时会写 BOM，而 `json.load(encoding="utf-8")`
@@ -89,13 +142,18 @@ def _load_config() -> dict:
       实测：用户填的路径整份被丢掉。utf-8-sig 读**不带** BOM 的文件也完全正常，
       所以这么改没有任何代价。
     """
-    global CONFIG_ERROR
+    global CONFIG_ERROR, CONFIG_WAS_MISSING
     here = "（%s）" % CONFIG_PATH
     try:
         with open(CONFIG_PATH, encoding="utf-8-sig") as fh:
             d = json.load(fh)
     except FileNotFoundError:
-        return {}                      # 首次运行 —— 正常，不出声
+        # 文件不在。**这里先不出声**：光凭 import 期能看到的东西分不清
+        # "首次运行"和"配置被删了"—— 最后一条物证（产出目录里有没有出图）
+        # 要等 OUT_ANIME 定义出来才知道。交给 `note_config_gone_if_used()`，
+        # 由启动流程在最后调一次。
+        CONFIG_WAS_MISSING = True
+        return {}
     except UnicodeDecodeError as e:
         CONFIG_ERROR = (
             "config.json 不是 UTF-8 编码%s —— %s。"
@@ -467,23 +525,62 @@ COMFY_OUTPUT = _pick("comfy_output", "COMFYUI_OUTPUT", _DET["output"],
 MODELS_DIR = _pick("models_dir", "COMFYUI_MODELS", _DET["models"],
                    os.path.join(APP_DIR, "models"), "models 根目录")
 
-# 默认底模。空 = 用下面这个兜底名，check_env.py 会告诉你装没装。
-#
-# ★ 兜底名必须和 README 让用户装的那个模型一致。
-#   这一条踩过：更早的默认底模写的是 "Illustrious-XL-v2.0.safetensors"，
-#   而 README 的模型清单和 install_models.py 装的是另一个名字 ——
-#   于是**全新安装的用户明明装对了，check_env.py 却报"找不到底模"**，
-#   而且报的是一个他从来没听说过的文件名。
-#   正常流程里 config.json 会被 安装模型.bat 写好，但"没有 config.json"
-#   恰恰是新装用户的默认状态，所以这个兜底值是真会被用到的。
-#   当前默认 = Illustrious-XL 官方 v2.0（= install_models.MODELS 里的第一条，
-#   两处必须一致；dev/audit_release.py 会核对发布包的 config.example.json）。
-CHECKPOINT = CONFIG.get("checkpoint") or "Illustrious-XL-v2.0.safetensors"
+CHECKPOINT = CONFIG.get("checkpoint") or FALLBACK_CHECKPOINT
 
 # ---------------------------------------------------------------- 3. 用户数据
 OUT_ANIME = os.path.join(COMFY_OUTPUT, "anime")
 OUT_DEPTH = os.path.join(OUT_ANIME, "_depth")
 RECYCLE_DIR = os.path.join(OUT_ANIME, "_recycle")
+
+
+def _output_dir_has_shoots() -> bool:
+    """产出目录里已经有出图吗？（日期文件夹 = 出过图）
+
+    `_depth` / `_recycle` / `_depth_test` 不算 —— 它们是服务自己建的下属目录，
+    首次启动就会出现，拿它们当"用过"的证据等于人人都算用过。
+
+    ⚠️ 定义在这里（`OUT_ANIME` 下面）是**必须的**：它在 `note_config_gone_if_used()`
+    里被调用，而那个函数在启动时才跑（那时整个模块已经加载完）。
+    """
+    try:
+        for e in os.listdir(OUT_ANIME):
+            if e not in ("_depth", "_recycle", "_depth_test") \
+                    and os.path.isdir(os.path.join(OUT_ANIME, e)):
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def note_config_gone_if_used() -> str:
+    """★ 启动流程最后调一次：config.json 不在，但**这台机器用过这个应用**吗？
+
+    为什么必须单独一步、不能在 import 期判：
+
+      · import 期能看到的物证只有 `_provenance.json` / `lora_aliases.json` /
+        `custom_prompt_options.json` 三个文件 —— 都在模块前段，可以判；
+      · "产出目录里已经有出图的日期文件夹"同样是最硬的证据，但它依赖
+        `OUT_ANIME`，而 `OUT_ANIME` 排在文件后半段 —— import 期根本还不存在。
+
+    所以这里把两条合起来，**在启动时**（整模块已加载完）做最终判定。
+    返回那句提示（同时写进 `CONFIG_ERROR`），`None` = 什么都没发生。
+
+    为什么是这个 `**` 加粗的底模名：用户必须一眼看出"我现在用的不是你挑的那个"。
+    """
+    global CONFIG_ERROR
+    if not CONFIG_WAS_MISSING or CONFIG_ERROR:
+        return None
+    if not _config_was_deleted() and not _output_dir_has_shoots():
+        return None                     # 真首次运行 —— 保持安静
+    CONFIG_ERROR = (
+        "config.json 不见了（%s），但这台机器已经用过这个应用（有出图记录或"
+        "你配过的东西），所以这不是首次运行。"
+        "现在底模退回写死的默认值 **%s**，你原来挑的那个没有生效，"
+        "产出目录等设置也一并退回自动探测。"
+        "修复：双击「安装模型.bat」会按 config.example.json 重建一份"
+        "带说明的 config.json（再重挑一次底模）。" % (CONFIG_PATH, FALLBACK_CHECKPOINT))
+    print("[warn] %s" % CONFIG_ERROR, file=sys.stderr)
+    return CONFIG_ERROR
 
 # ---------------------------------------------------------------- 4. 服务端口
 # 端口以前写死在 main() 里，只能用 --port 覆盖。现在进配置：

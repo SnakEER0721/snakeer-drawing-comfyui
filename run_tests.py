@@ -103,6 +103,8 @@ FAST = [
                                 #       （上游报告 P1-2/P1-3/P1-4）。纯函数，不占 GPU。
                                 #       把 check_param_ranges 短路掉这个测试立刻变红（22 条）
     "test_alias_kind_guard.py",  # 回归：别名文字会**反向决定** LoRA 分类
+    "test_config_missing_warns.py",  # 回归：config.json 不见了不能静默退回兜底底模
+    "test_config_gone_e2e.py",   # 端到端：那句话要真的走到 /api/capabilities 上
                                 #       （给 r17329_illuu 起名带「角色」→ 被判成角色，
                                 #        实际是画风 LoRA）。只读，不碰 lora_aliases.json；
                                 #       含 A/B：拿"必然触发"的样本验证工具真的会红

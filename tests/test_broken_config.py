@@ -148,19 +148,38 @@ try:
     # ------------------------------------------------------------ 【3】
     print()
     print("【3】真的会走到界面上")
-    check("server 拿到的是 paths 在 import 时的那个值（同一个来源）",
+    # ★ 这里原来断言的是"server 拿到的是 paths 在 import 时的那个值"——
+    #   那其实**是在钉一个 bug**：import 快照在启动后永远是旧的，而
+    #   "config.json 不见了"这条判据要到**启动时**才算得出来（它要看产出目录
+    #   里有没有出图记录），算出来写回的是 `paths.CONFIG_ERROR`。接口读快照的话，
+    #   界面上什么都不显示 —— 而这正是最该显示的那一种。
+    #   现在钉的是新的（也是唯一对的）行为：**改 paths 里的值，必须能到接口上**；
+    #   改那个快照名字，**必须没有任何作用**。
+    check("server 仍然 import 了那个值（旧引用还在，但接口不再依赖它）",
           server.CONFIG_ERROR == PATHS_ERR_AT_IMPORT,
           (server.CONFIG_ERROR, PATHS_ERR_AT_IMPORT))
     dead = server.COMFY
     server.COMFY = "http://127.0.0.1:9"     # 死端口：capabilities 里那些探测会快速失败
-    server.CONFIG_ERROR = "config.json 读不出来（举例）"
+    paths.CONFIG_ERROR = "config.json 读不出来（举例）"
     try:
         c = server.capabilities()
+        cap = c.get("config_error")
     finally:
         server.COMFY = dead
-        server.CONFIG_ERROR = PATHS_ERR_AT_IMPORT
+        paths.CONFIG_ERROR = PATHS_ERR_AT_IMPORT
     check("capabilities() 把 config_error 带给前端",
-          c.get("config_error") == "config.json 读不出来（举例）", c.get("config_error"))
+          cap == "config.json 读不出来（举例）", cap)
+
+    # 反向：只改快照、不改 paths → 接口**不该**跟着变。
+    # 没有这条，上面那条在"两种读法都通"的实现下也会绿，就白测了。
+    server.CONFIG_ERROR = "只改了快照，不该出现"
+    try:
+        c2 = server.capabilities()
+        cap2 = c2.get("config_error")
+    finally:
+        server.CONFIG_ERROR = PATHS_ERR_AT_IMPORT
+    check("只改 import 快照不起作用（接口读的是 paths 的实时值）",
+          cap2 != "只改了快照，不该出现", cap2)
     check("真实 config.json 正常时它是 None（这样界面才不会无缘无故报红）",
           PATHS_ERR_AT_IMPORT is None, PATHS_ERR_AT_IMPORT)
 
