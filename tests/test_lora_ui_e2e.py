@@ -210,8 +210,24 @@ with sync_playwright() as pw:
                   "（目录没生成？见 dev/make_lora_catalog.py）")
         else:
             tt = row_for(pg, target["file"]) or ""
-            check("C站真名" in tt and d["catalog_name"] in tt,
+            # ★ 判据必须跟 `ui.html` 的真实规则走，不能再要求那个前缀**总在**。
+            #   ui.html 里是：
+            #       (m.alias ? "C站真名 " : "") + m.catalog_name
+            #   也就是**有本地别名才加「C站真名」四个字**（2026-09-20 故意改的：
+            #   没别名时这个名字本身就是唯一的名字，再标"真名"没有信息量）。
+            #   而靶子是按"有 catalog_name"挑的，**没要求它没别名** —— 于是
+            #   "行里一定有 C站真名"是一句碰运气的话：同一个文件在自己机器上
+            #   有没有别名，结果就不同。实测本机就红在这里（靶子 748cmSDXL
+            #   .safetensors 当时别名是空的），红得毫无信息量。
+            #   现在改成两条一起判：名字**必须**渲染出来；前缀则**按状态**要求
+            #   —— 有别名就必须有前缀（原来那层"让用户看出是自动取的"的意思），
+            #   没别名就不该有前缀。两边都比原来钉得死。
+            check(d["catalog_name"] in tt,
                   "行里显示 C站真名「%s」" % d["catalog_name"])
+            check(("C站真名" in tt) == bool(d.get("alias")),
+                  "「C站真名」前缀跟着别名走（当前 alias=%r -> 前缀该%s）：%s"
+                  % (d.get("alias"), "在" if d.get("alias") else "不在",
+                     tt[:70].replace("\n", " ")))
             check("C站数据" in tt or "你标的" in tt,
                   "来源角标说的是 C站数据/你标的：%s"
                   % tt[:60].replace("\n", " "))

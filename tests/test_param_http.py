@@ -68,6 +68,14 @@ def recent_paths():
             if isinstance(it, dict)}
 
 
+def recycle_files():
+    """回收站里现在有哪些文件。用前后差集认自己的产物，**不猜文件名**。"""
+    try:
+        return set(os.listdir(paths.RECYCLE_DIR))
+    except Exception:
+        return set()
+
+
 def wait_up(proc, secs=40):
     for _ in range(secs * 2):
         if proc.poll() is not None:
@@ -182,11 +190,33 @@ try:
             files, ok = [], False
         check(ok, "界面能选的最小值（steps=10 cfg=1.0 768×768）能出图：HTTP %d，%d 张"
               % (code, len(files)))
-        # 出完立刻清掉，不给用户产出目录留东西
+        # 出完立刻清掉，不给用户产出目录留东西。
+        #
+        # ⚠️ /api/delete 是**移进回收站**，不是真删。所以只断言"产出目录里没了"
+        #   是不够的 —— 原来这里就是这么写的（assert not os.path.isfile(p)），
+        #   它一直是绿的，而**每跑一次这个测试，用户的回收站就多一个 ui_*.png**，
+        #   没有任何信号。实测：连跑两次，回收站 92 -> 93 -> 94，净增 2。
+        #   这和 AGENTS.md 里记的那次事故是同一个病（"中间产物落进 _recycle 就
+        #   看不见了，于是一次次累积"），只是换了个测试。
+        #   修法同 test_compare_feature.py：用回收站**前后差集**认出自己的产物，
+        #   并且把"确实是移进回收站"这件事**断言出来**（比只断言目录里没了更强：
+        #   万一有人把 move_to_recycle 改成 os.remove，这条会变红）。
+        rx_before = recycle_files()
         for p in files:
             post("/api/delete", json.dumps({"path": p}).encode("utf-8"))
         check(all(not os.path.isfile(p) for p in files),
               "为验证产出的 %d 张已从产出目录清掉" % len(files))
+        rx_new = recycle_files() - rx_before
+        check(len(rx_new) == len(files),
+              "/api/delete 把它们移进了回收站而不是直接删掉："
+              "回收站新增 %d 条（期望 %d）" % (len(rx_new), len(files)))
+        for name in sorted(rx_new):
+            try:
+                os.remove(os.path.join(paths.RECYCLE_DIR, name))
+            except Exception:
+                pass
+        check(not (recycle_files() - rx_before),
+              "测试自己的产物已从回收站清掉（不给用户的回收站留东西）")
 
     print()
     print("=" * 76)
