@@ -54,7 +54,7 @@ def run_tool(alias_path):
 print("== 别名分类守卫（dev/check_alias_kind.py）==")
 
 # ---- 前置①：有没有可查的别名表 ----
-# 全新安装（发布包就是）根本没有 lora_aliases.json —— 用户还没写过别名。
+# 全新安装根本没有 lora_aliases.json —— 用户还没写过别名。
 # 没有可查的东西时**说清理由并跳过**，不能判失败。
 if not os.path.isfile(ALIAS):
     print("   SKIP 没有 lora_aliases.json（用户还没写过别名），本次跳过")
@@ -62,13 +62,25 @@ if not os.path.isfile(ALIAS):
     sys.exit(0)
 
 # ---- 前置②：工具在不在 ----
-# dev/ 不进发布包，所以发布包里这个工具必然不存在。
-# 上面那道闸已经把"发布包"这种情况拦在 SKIP 里了；能走到这里说明
-# 有正式别名表，那是维护者本机 —— 此时工具缺了就是**真的坏了**，判失败。
-check(os.path.isfile(TOOL), "工具存在：dev/check_alias_kind.py")
+# dev/ 不进发布包，所以**发布目录里**这个工具必然不存在。
+#
+# ⚠️ 这里曾经判"有别名表就说明是维护者本机，工具缺了就是真坏了" —— 那条推理
+#    是错的，而且 09-22 的 `--clean` 修好之后**真的踩响了**：
+#    打包器现在**有意保住**发布目录里的 lora_aliases.json（见 dev/README.md
+#    那节 —— 清掉它会连用户的东西一起丢），于是发出去的这份测试拿到的是
+#    维护者那份**私人别名表**，而 `dev/` 按设计不在包里 ——
+#    「文件在」不再等于「这是开发检出」。
+#    后果：`audit_release_runtime.py` 拿包里这份测试去跑，会出一条假红。
+#
+# 判据要落在**真正决定能不能测**的东西上：工具在不在。
+# 工具不在 = 这个守卫没法执行 = SKIP（说清理由），不是产品坏了。
 if not os.path.isfile(TOOL):
-    print("\nRESULT: 1 项失败")
-    sys.exit(1)
+    print("   SKIP 没有 dev/check_alias_kind.py（dev/ 不进发布包），本次跳过")
+    print("        —— 这是发布包里的正常状态，不是失败；守卫的 A/B 由开发检出负责")
+    print("\nRESULT: SKIP")
+    sys.exit(0)
+
+check(os.path.isfile(TOOL), "工具存在：dev/check_alias_kind.py")
 
 real = json.loads(io.open(ALIAS, encoding="utf-8").read())
 
