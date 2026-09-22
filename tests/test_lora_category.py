@@ -179,12 +179,30 @@ if details:
     with_src = [d for d in details if d.get("kind_source")]
     check(all(d.get("kind_source") for d in with_src),
           "kind_source 只在有来源时出现（%d 条有）" % len(with_src))
-    # 不兼容必须压过一切
+    # 不兼容必须压过一切。
+    #
+    # ⚠️ 这条现在是**空断言**（数出来 0 个 incompatible，断言恒真）—— 但不是
+    # 因为删了代码，而是因为 `lora_key_layout()` 不再把 diffusers 命名判成
+    # 不兼容了。改这个判据的实测依据：ComfyUI 的 `model_lora_keys_unet` 把两套
+    # 命名都放进 key_map（真底模上 6970 条，kohya 359 + diffusers 363），
+    # 所以 diffusers 命名的文件照样 346 层全生效。命名方式本来就不是兼容性信号。
+    #
+    # 留着这条的用意为：`compatible is False` → `kind == "incompatible"` 这条
+    # 规则本身还在（只有"根本不是 SDXL UNet LoRA"才会 False），规则一旦被打破
+    # 它就会红。想验证它真的还能红，得**造一个 compatible=False 的样本**，
+    # 而不是指望这台机器上恰好有一个。
     inc = [d for d in details if (d.get("key_layout") or {}).get("compatible") is False]
     wrong = [d["file"] for d in inc if d.get("kind") != "incompatible"]
     check(not wrong,
           "格式不兼容的 LoRA，kind 一定是 incompatible（不兼容 %d 个，判错 %s）"
           % (len(inc), wrong or "无"))
+    # 反向也要管：能被加载的 LoRA **不该**被标成不兼容（这条才是有内容的，
+    # 它正是 diffusers 误判那次会红的地方）
+    ok_but_inc = [d["file"] for d in details
+                  if (d.get("key_layout") or {}).get("compatible") is True
+                  and d.get("kind") == "incompatible"]
+    check(not ok_but_inc,
+          "声明可加载的 LoRA 不该被标成不兼容（判错 %s）" % (ok_but_inc[:5] or "无"))
     # 每条都要有给用户看的中文名
     no_label = [d["file"] for d in details if not d.get("label")]
     check(not no_label, "每个 LoRA 都有 label（没有的: %s）" % (no_label[:5] or "无"))

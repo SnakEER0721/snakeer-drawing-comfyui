@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import re
 import shutil
@@ -81,7 +82,15 @@ DEFAULTS = {
     "ref_strength": 0.8,
     "depth_strength": 0.7,
 }
-SUBJECT_DEFAULT = "1girl, solo"
+# 主体词曾经是 SUBJECT_DEFAULT = "1girl, solo"，用户提示词里没写人物时自动补上。
+# 2026-09-20 用户要求**彻底删掉**，理由是它和人打架：
+#   * 判断只看整段文本里有没有 "1girl"/"1boy"/"girls"/"boys"/"solo"，
+#     于是 "2girls"（两个女孩）不匹配 → 照样补 "1girl, solo"，
+#     和「我要画两个人」直接矛盾
+#   * "solo" 的语义是「画面里只有一个人」，用户想要多人时必须手动去删
+# 现在的行为：程序一个字都不加，写什么就是什么。代价（用户已知悉并接受）：
+# 提示词里没写人物时，出来的是纯风景。
+# 别再把它加回来 —— 要恢复成「自动补」需要先问用户。
 # 默认负向词（同样是 Illustrious 系通用的一套，出处见上面 QUALITY 的注释）
 NEGATIVE_DEFAULT = ("lowres, bad quality, worst quality, worst detail, "
                     "username, signature")
@@ -519,6 +528,71 @@ def comfy_post(path: str, payload: dict, timeout: int = 60) -> dict:
     return json.loads(body) if body.strip() else {}
 
 
+# ------------------------------------------------- 自动释放显存
+# 为什么需要它：我们**从来不让 ComfyUI 卸载模型**。每出一张图，模型就进一次
+# 显存；换底模时新的进来了、旧的还挂着。ComfyUI 自己有 unload_all_models() /
+# cleanup_models() / soft_empty_cache()，但**得有人喊它才动**。
+#
+# 实测症状（RTX 4060 Laptop 8 GB）：显存吃到 4.18 GB，ComfyUI 那个进程的
+# 系统内存挂到 7.5 GB —— 显存不够就往系统内存挤，两头都满就卡死。
+# 用户反馈「app 开太久容易卡死」就是这么来的。
+#
+# 做法：每出 N 张图，主动喊一次 ComfyUI 的 POST /free。
+#   * 只在**队列空了**的时候喊。ComfyUI 的 /free 不打断正在跑的任务，但
+#     用户用 ComfyUI 界面自己排了队时，卸载会白白增加一次重载。
+#   * 只在**出完图**之后喊，不在提交前喊 —— 提交前喊等于刚卸载就重载，
+#     每张图都多一次 6.5 GB 的读盘。
+_AUTO_FREE_LOCK = threading.Lock()
+_AUTO_FREE_COUNT = 0
+# 为什么是 5：实测这张 8 GB 卡出一张 512x512 的图就吃掉 5.51 GB 显存，
+# 出第二张时就已经在往系统内存挤了。所以留的余量必须小于 5 张。
+# 调大（更少清理）会在 8 GB 卡上重新出现卡顿；调小（更勤清理）不会更安全，
+# 只会让每张图都多等一次模型重载（6.5 GB 读盘）。2026-09-20 由 10 调成 5。
+_AUTO_FREE_EVERY = 5           # 每 N 张释放一次；0 = 关掉
+
+
+def free_comfy_memory(force: bool = False) -> bool:
+    """让 ComfyUI 卸载模型、清掉显存缓存。返回是否真的执行了。
+
+    `force=False` 时只在队列为空时动手。任何失败都只记日志、不抛 ——
+    清理是「顺手做的好事」，**绝不能因为它失败而让出图报错**。
+    """
+    try:
+        if not force:
+            q = comfy_get("/queue")
+            running = len(q.get("queue_running") or [])
+            pending = len(q.get("queue_pending") or [])
+            if running or pending:
+                return False
+        comfy_post("/free", {"unload_models": True, "free_memory": True})
+        return True
+    except Exception as e:
+        warn("释放显存失败（不影响出图）", e)
+        return False
+
+
+def maybe_auto_free() -> bool:
+    """累计出图张数，够 N 张就释放一次显存。"""
+    global _AUTO_FREE_COUNT
+    if _AUTO_FREE_EVERY <= 0:
+        return False
+    with _AUTO_FREE_LOCK:
+        _AUTO_FREE_COUNT += 1
+        if _AUTO_FREE_COUNT < _AUTO_FREE_EVERY:
+            return False
+        _AUTO_FREE_COUNT = 0
+    ok = free_comfy_memory()
+    # 必须留一行日志。踩过的坑：第一版成功时**完全静默**，于是「它到底有没有
+    # 在跑」只能靠猜 —— 实测时用户出了 6 张图，我只能从"显存没满、两次出图
+    # 之间隔了 30 秒"倒推出它触发过。清理失败会 warn，成功却无声，等于
+    # 这条链路没有任何可观察性：哪天它不触发了，没有任何迹象。
+    # 只每 N 张打一行，不刷屏。
+    print("[清理] 已连续出图 %d 张，%s（显存/系统内存已让 ComfyUI 释放）"
+          % (_AUTO_FREE_EVERY, "成功" if ok else "跳过（队列非空或 ComfyUI 不可达）"),
+          file=sys.stderr, flush=True)
+    return ok
+
+
 def object_info_choices(node: str, field: str, default: list | None = None) -> list:
     """Options ComfyUI reports for a COMBO input, e.g. installed model files.
 
@@ -705,18 +779,39 @@ def extract_triggers(path: str) -> dict:
     }
 
 
-# ComfyUI's LoRA loader expects kohya's naming
-# (lora_unet_input_blocks_*). A file saved in diffusers layout
-# (lora_unet_down_blocks_*) loads without error but patches NOTHING: the log
-# fills with "lora key not loaded" and the sampler runs with an invalid patch
-# set, which produces flat, washed-out output. Detect it up front.
+# ComfyUI accepts BOTH LoRA key spellings. `comfy/lora.py`'s
+# `model_lora_keys_unet` builds its key_map from two sources: the model's own
+# `diffusion_model.input_blocks.*` keys (giving the kohya spelling
+# `lora_unet_input_blocks_1_0_in_layers_2`) and `comfy.utils.unet_to_diffusers()`
+# (giving the diffusers spelling `lora_unet_down_blocks_0_resnets_0_conv1`).
+# Both names point at the same weight.
+#
+# Measured on the real rinFlanimeIllustrious_v50 checkpoint: the key_map holds
+# 6970 entries, split by KEY spelling into 3346 kohya-form and 3624
+# diffusers-form (3346 + 3624 = 6970; counted on `km`'s KEYS -- its VALUES are
+# always the base model's own `diffusion_model.*` keys and contain no
+# `down_blocks` at all, so counting values gives a nonsense "0 diffusers").
+# A diffusers-named LoRA therefore loads fine -- verified by feeding the file's
+# real tensors to `comfy.lora.load_lora` and getting 346 patches, and by
+# converting the same file to kohya spelling and getting the identical 346
+# patches with zero differing values.
+#
+# This function used to call diffusers naming "incompatible", which made the
+# app refuse to wire a perfectly good LoRA into the graph. Do not reinstate
+# that: naming scheme is NOT a compatibility signal. Only `readable` and
+# `not a UNet LoRA at all` are.
 _SDXL_KOHYA = re.compile(r"lora_unet_(input_blocks|middle_block|output_blocks)_")
 _SDXL_DIFFUSERS = re.compile(r"lora_unet_(down_blocks|mid_block|up_blocks)_")
 _HAS_CJK = re.compile(r"[\u4e00-\u9fff]")
 
 
 def lora_key_layout(path: str) -> dict:
-    """Which naming scheme does this LoRA use, and will ComfyUI accept it?"""
+    """Which naming scheme does this LoRA use? (Both work, so this is cosmetic.)
+
+    `compatible` means "ComfyUI can load this", not "uses one particular
+    spelling". It is False only when we can tell the file is not an SDXL UNet
+    LoRA at all.
+    """
     hdr = _read_safetensors_header(path)
     if not hdr:
         return {"compatible": None, "kohya": 0, "diffusers": 0, "text_encoder": 0,
@@ -725,15 +820,18 @@ def lora_key_layout(path: str) -> dict:
     kohya = sum(1 for k in keys if _SDXL_KOHYA.search(k))
     diff = sum(1 for k in keys if _SDXL_DIFFUSERS.search(k))
     te = sum(1 for k in keys if k.startswith("lora_te"))
-    if kohya:
+    if kohya and diff:
         return {"compatible": True, "kohya": kohya, "diffusers": diff,
+                "text_encoder": te,
+                "note": "命名格式兼容（两种命名混用，ComfyUI 都认）"}
+    if kohya:
+        return {"compatible": True, "kohya": kohya, "diffusers": 0,
                 "text_encoder": te, "note": "命名格式兼容"}
     if diff:
-        return {"compatible": False, "kohya": 0, "diffusers": diff,
+        return {"compatible": True, "kohya": 0, "diffusers": diff,
                 "text_encoder": te,
-                "note": "该 LoRA 使用 diffusers 命名（down_blocks），而 ComfyUI 只认 "
-                        "kohya 命名（input_blocks）。加载后一个权重都不会应用，"
-                        "还会拖慢生成并可能污染画面 —— 建议不要使用"}
+                "note": "命名格式兼容（diffusers 命名 down_blocks；"
+                        "ComfyUI 同样认得，不影响使用）"}
     return {"compatible": None, "kohya": 0, "diffusers": 0, "text_encoder": te,
             "note": "不是 SDXL UNet LoRA（可能是 SD1.5 / Pony / Flux 版本）"}
 
@@ -1287,14 +1385,25 @@ def lora_details() -> list:
                 info['display'] = info['alias'] or info['file']
             # 作者声明的触发词（通过文件哈希从 C站原文精确取得）优先于
             # 训练元数据推断 —— 后者常常只是训练样本图的标签，会误报。
+            #
+            # ⚠️ 这两条路的**来源不同，说明必须跟着变**：目录那一路是真按
+            # SHA256 从 C站查回来的；别名表那一路是**用户手填**的。早先这里
+            # 无论走哪条都写「来源：C站原文，按文件哈希定位」—— 用户手填的
+            # 触发词被标成"哈希查证过"，等于给一个没验证过的值盖了个验证章。
+            # 实测踩到：`r17329_illuu` 的 `sketch` 是手填的，界面却显示
+            # 「按文件哈希定位」。
             src_trig = a.get('triggers_source')
             if isinstance(src_trig, list) and src_trig:
                 td = dict(info.get('trigger_detail') or {})
                 td['all'] = [str(x) for x in src_trig]
                 td['candidates'] = td['all']
-                td['confident'] = True
-                td['auto'] = True
-                td['note'] = "作者声明的触发词（来源：C站原文，按文件哈希定位）"
+                # 手填的一份不标 confident —— 那是"哈希查证过"的意思，
+                # 而这里只是用户说了算。
+                td['confident'] = bool(cf)
+                td['auto'] = bool(cf)
+                td['note'] = ("作者声明的触发词（来源：C站原文，按文件哈希定位）"
+                              if cf else
+                              "你在本地命名表里写的触发词（未经哈希核对）")
                 info['trigger_detail'] = td
                 info['triggers'] = td['all']
             # ★ 别名表里没写的时候**不要用空串覆盖** —— 上面刚填好的目录信息会被
@@ -1443,6 +1552,7 @@ def resolve_lora_list(p: dict) -> list:
 
 def build_graph(p: dict) -> dict:
     """Assemble the ComfyUI API graph from the request parameters."""
+    check_param_ranges(p)          # 越界/NaN 在写进图之前就拦住（-> 400）
     positive = p["positive"]
     negative = p.get("negative") or NEGATIVE_DEFAULT
     seed = int(p.get("seed") or 0)
@@ -1728,6 +1838,7 @@ def build_inpaint_graph(image_name: str, mask_name: str, p: dict,
         using the mask, so pixels outside the mask keep their exact original
         values instead of being re-decoded.
     """
+    check_param_ranges(p)          # 和 build_graph 同一道闸：两个入口不许分叉
     steps = int(p.get("steps", DEFAULTS["steps"]))
     cfg = float(p.get("cfg", DEFAULTS["cfg"]))
     denoise = float(p.get("denoise", DEFAULTS["inpaint_denoise"]))
@@ -1988,7 +2099,18 @@ def build_depth_graph(image_name: str, model: str = None, resolution: int = 504)
                          "output.apply_sky_clip": False}}
     sv = nid_next()
     g[sv] = {"class_type": "SaveImage",
-             "inputs": {"images": [ren, 0], "filename_prefix": "depth"}}
+             # ★ 前缀必须带 `temp/`，和出图 / 重绘 / 放大三条图一样。
+             #
+             # 写成裸 "depth" 时，ComfyUI 会把深度图存进**产出目录的根**
+             # （ComfyUI 报 subfolder=''，实测落在用户的产出目录正下方），
+             # 而 run_graph 的清理只删 `COMFY_OUTPUT/temp/` 底下的副本 ——
+             # 于是够不着，每解析一张深度图就在产出目录根上留一个文件，
+             # 本机累积到 8 个（实测）。清理那段见 run_graph 里
+             # "Remove ComfyUI's own copy"。
+             #
+             # 程序自己的那份在 OUT_DEPTH (= anime/_depth)，由 run_graph 下载。
+             # 这里只是 ComfyUI 的中转副本，落进 temp/ 才会被清掉。
+             "inputs": {"images": [ren, 0], "filename_prefix": "temp/depth"}}
     return g
 
 
@@ -2058,6 +2180,10 @@ def run_graph(graph: dict, out_dir: str, stem: str, timeout_s: int = 900) -> lis
                             warn("清理中转文件失败", e)
                 if not saved:
                     raise RuntimeError("任务完成但没有产出图片")
+                # 出完图再释放显存：每 N 张一次，队列空着才动手。
+                # 放在 return 之前、**不放进 finally** —— 失败的任务留给用户
+                # 重试时模型还在显存里，重试更快。
+                maybe_auto_free()
                 return saved
         time.sleep(0.6)
     raise TimeoutError(f"超时 {timeout_s}s")
@@ -2498,6 +2624,99 @@ def _err_code(e: Exception) -> int:
     return 400 if isinstance(e, BadParam) else 500
 
 
+# ---------------------------------------------------------------- 参数范围
+#
+# 上游报告（2026-09-20，P1-2 / P1-3 / P1-4）实测确认的三件事：
+#
+#   ① 服务端**零范围校验**。直接调 build_graph（纯函数，零副作用）：
+#      10 个参数里 9 个原样透传 —— width=999999 就真写 999999、
+#      width=-100 就真写 -100、count=99999 就真写 batch_size 99999、
+#      steps=0 就真写 0、checkpoint="../../evil.safetensors" 也原样写。
+#
+#   ② 顺带更正报告一处说法：报告写「ComfyUI 侧宽高/批量不挡」，
+#      但打真实 HTTP 时 width/height/batch_size/clip_skip **都被它拒了**
+#      （"width 超过上限（最大 16384）"）。所以准确的结论不是"会崩"，
+#      而是**这道防线不在我们手里**：报错文案是 ComfyUI 的，走的是 HTTP 500
+#      （"服务器挂了"）而不是 400（"你参数写错了"）—— 和项目自己在
+#      `/api/upscale` 里明确区分这两种情况的做法冲突。
+#
+#   ③ cfg=NaN **静默出图成功（HTTP 200）**，没有任何提示 —— 这条最危险：
+#      报错至少能被发现，一张"看起来正常但参数无意义"的产物会被当正常结果用下去。
+#      实测过：`{"cfg":NaN}` 真的返回 200 并写出一张 PNG。
+#
+# 所以这里加的是**纵深防御**：界面本身有完整范围（steps 是 min=10 max=50 的
+# range、count 只有 1/2/4、宽高是下拉框），正常点界面触发不了这几条 ——
+# 它们只在"前端漏了 min"、"脚本调 API"、"复制粘贴的请求体"这类情况下生效。
+#
+# 范围取的是「比界面能送出的更宽」：不拦正常用法，只拦明显要毁事的值。
+# 宽高下限 64 / 上限 2048：界面只有 768~1360，而 ComfyUI 自己上限 16384，
+# 2048 挡住 width=999999 那种，又给脚本留了余量。
+PARAM_RANGES = [
+    ("width", 64, 2048, "像素"),
+    ("height", 64, 2048, "像素"),
+    ("steps", 1, 200, "步"),
+    ("cfg", 0.1, 30.0, ""),
+    ("count", 1, 8, "张"),
+    ("clip_skip", 0, 12, "层"),
+    ("mask_grow", 0, 256, "像素"),
+    ("mask_feather", 0, 256, "像素"),
+]
+
+# 这些只要"是个有限数字"就行 —— 上下界由各自的业务逻辑管（例如权重允许负值）。
+#
+# 注意**没有** denoise：它不在 DEFAULTS 里，而且 `build_graph` 自己会把它夹到
+# 1.0（txt2img 下 denoise<1 会留一层灰雾，见那里的注释）。这里再拦一道范围
+# 只会在"以后放宽那个夹取"时突然拦住正常请求，所以只要求它有限。
+PARAM_FINITE_ONLY = ("seed", "denoise", "sketch_strength", "depth_strength",
+                     "ref_strength", "factor", "lora_strength")
+
+
+def check_param_ranges(p: dict) -> None:
+    """越界/NaN/Infinity 一律抛 BadParam（-> HTTP 400 + 一句能照着改的话）。
+
+    为什么放这里而不是逐个写进 build_graph：那是核心建图函数，
+    而且 `build_graph` / `build_inpaint_graph` 两个入口都要用 ——
+    写两遍必然分叉。这里是单一入口，两个建图函数开头各调一次。
+    """
+    if not isinstance(p, dict):
+        return                      # 不是 dict 的情况由 _read_body 管
+    for key, lo, hi, unit in PARAM_RANGES:
+        if key not in p:
+            continue                # 没传 = 用 DEFAULTS，不用校验
+        v = p[key]
+        if isinstance(v, str) or isinstance(v, bool):
+            continue                # 字符串交给下游 int()/float() 报 BadParam；
+                                    # bool 是 int 的子类，不能当数字过 range
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            continue                # 下游会给出"应该是整数"那句更贴切的话
+        # ★ NaN 的比较**全是 False** —— 不单独判就会**漏过去**
+        #   （`not (NaN_lo <= NaN <= NaN_hi)` 里两个比较都是 False，
+        #    但 `NaN <= hi` 也是 False，所以下面那行的 not 会变成 True 拦住它。
+        #    这里显式写出来是为了让别人一眼看到"NaN 已经被想到了"，不靠推导。）
+        if math.isnan(fv) or math.isinf(fv):
+            raise BadParam("%s 收到了 %s，应该是 %s 到 %s 之间的数字"
+                           % (key, "NaN" if math.isnan(fv) else "无穷大", lo, hi))
+        if not (lo <= fv <= hi):
+            raise BadParam("%s 收到了 %s，超出范围 —— 合法范围是 %s 到 %s%s"
+                           % (key, ("%g" % fv), lo, hi, (" " + unit) if unit else ""))
+
+    for key in PARAM_FINITE_ONLY:
+        if key not in p:
+            continue
+        v = p[key]
+        if isinstance(v, str) or isinstance(v, bool) or v is None:
+            continue
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(fv) or math.isinf(fv):
+            raise BadParam("%s 收到了 %s，应该是一个有限的数字"
+                           % (key, "NaN" if math.isnan(fv) else "无穷大"))
+
+
 def num_param(body: dict, key: str, default, cast=float):
     """从请求体取一个数字参数。坏值抛 BadParam（-> 400），不抛 TypeError。
 
@@ -2508,15 +2727,25 @@ def num_param(body: dict, key: str, default, cast=float):
 
     空串也当"没传"（返回 default）—— `int("")` 会抛 ValueError，
     而"输入框空着"的语义就是"用默认值"。
+
+    ★ NaN / Infinity 也在这里拦：`float("inf")` 和 `float("nan")` **不抛异常**
+    （那是合法的 Python float），所以下面那个 except 抓不到它们 ——
+    上游报告 P1-3 实测 `{"width":Infinity}` 一路走到 `int(inf)` 才抛
+    `OverflowError: cannot convert float infinity to integer`，用户看到的是
+    Python 内部错误名。这里提前判掉，换成"收到的是什么、合法取值有哪些"。
     """
     v = body.get(key)
     if v is None or v == "":
         return default
     try:
-        return cast(v)
+        out = cast(v)
     except (TypeError, ValueError):
         raise BadParam("%s 收到了 %r，应该是%s"
                        % (key, v, "整数" if cast is int else "一个数字"))
+    if isinstance(out, float) and not math.isfinite(out):
+        raise BadParam("%s 收到了 %s，应该是一个有限的数字"
+                       % (key, "NaN" if math.isnan(out) else "无穷大"))
+    return out
 
 
 def move_to_recycle(img_path: str) -> str:
@@ -2569,7 +2798,37 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         if not n:
             return {}
-        return drop_null_params(json.loads(self.rfile.read(n).decode("utf-8")))
+        raw = self.rfile.read(n).decode("utf-8", "replace")
+
+        def _no_const(token: str):
+            """拒掉裸 JSON 里的 NaN / Infinity / -Infinity。
+
+            ★ 这三样是 Python 的 `json.loads` **默认就收**的（不是标准 JSON，
+            但 json 模块出于历史原因放行），而 `json.dumps` 默认又能产出它们。
+            于是 `{"steps":NaN}` 这种请求体会被解析成 float('nan') 一路带进建图。
+
+            上游报告（P1-3/P1-4）实测确认两条后果：
+              · `{"steps":NaN}`    -> 500 ValueError: cannot convert float NaN to integer
+              · `{"width":Infinity}` -> 500 OverflowError: cannot convert float infinity
+              · `{"cfg":NaN}`      -> **200，静默出了一张图**（没有任何提示）
+            最后一条最危险：报错至少能被发现，一张参数无意义的产物会被当正常结果用下去。
+
+            这里在**入口**就拒，而不是在各处补 `math.isfinite` —— 和
+            `drop_null_params` 同一个理由：入口一件事，下游 16 个调用点都不用改。
+            """
+            raise BadParam("请求体里有 %s —— JSON 里不允许 NaN/Infinity，"
+                           "数字请写成普通数字（NaN 会被当没填、无穷大会被拒）"
+                           % token)
+
+        try:
+            body = json.loads(raw, parse_constant=_no_const)
+        except BadParam:
+            raise
+        except (ValueError, TypeError) as e:
+            # `json.loads` 抛的是 "Expecting value: line 1 column 2 (char 1)" 这种
+            # 英文位置信息 —— 把它包成项目自己的话（400），别让它变成 500。
+            raise BadParam("请求体不是合法 JSON：%s" % e)
+        return drop_null_params(body)
 
     def _origin_ok(self) -> bool:
         """这个请求是不是"自己人"发的。
@@ -2788,7 +3047,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self._read_body()
         except Exception as e:
-            self._json({"ok": False, "error": f"请求体解析失败: {e}"}, 400)
+            # 用 _err_text 而不是 f"{e}"：BadParam 的消息本身已经是写给用户的
+            # 一句话（"width 收到了 NaN…"），再套一层和项目其他地方的文案就不一致了。
+            self._json({"ok": False, "error": _err_text(e)},
+                       _err_code(e) if isinstance(e, DELIBERATE) else 400)
             return
 
         # 保存一条自定义选项：{"group": 分组, "cn": 显示名, "en": 英文标签}
@@ -3128,6 +3390,18 @@ class Handler(BaseHTTPRequestHandler):
                             self._json({"ok": False,
                                         "error": "蒙版没有透明通道，请重新涂抹"}, 400)
                             return
+                        # ★ 这里**不要**再翻一次极性。
+                        #
+                        # 前端 exportMaskDataURL() 送出的约定是「涂过的地方 alpha=0」
+                        # （先铺不透明黑底，再用 destination-out 把笔画擦成透明）。
+                        # 而 ComfyUI 的 load_image() 读 alpha 时**自己就取反**
+                        # （alpha=0 → mask=1 = 要重绘），两边正好对上。
+                        #
+                        # 实测 A/B（dev/truth_inpaint_scope.py，自造四象限色块图，
+                        # 只涂右下角 3.85%，两个极性各跑一次）：
+                        #   alpha=0 处=涂过 → 涂抹区内变 100.00%，区外仅边界 1 像素
+                        #   alpha=255 处=涂过 → 涂抹区内变   0.00%，区外变 99.93%
+                        # 所以"涂过=alpha 0"就是正确极性，服务端保持原样即可。
                 except Exception as e:
                     self._json({"ok": False, "error": "蒙版读取失败: %s" % e}, 400)
                     return
@@ -3303,10 +3577,9 @@ class Handler(BaseHTTPRequestHandler):
                 elif not english:
                     self._json({"ok": False, "error": "提示词为空"}, 400)
                     return
-                low = english.lower()
-                subject = "" if any(k in low for k in
-                                    ("1girl", "1boy", "girls", "boys", "solo")) \
-                    else SUBJECT_DEFAULT
+                # 主体词不再自动补（原 SUBJECT_DEFAULT = "1girl, solo"）。
+                # 用户 2026-09-20 要求彻底删掉：它会给 "2girls" 这种多人提示词
+                # 补上自相矛盾的 "1girl, solo"。现在只送用户自己写的。
                 # The client sends the quality tags it has ticked; fall back to
                 # the default set when it sends none (older clients omit it).
                 q = p.get("quality")
@@ -3317,7 +3590,7 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     quality = str(q).strip()
                 p["positive"] = ", ".join(
-                    x for x in (quality, subject, english) if x)
+                    x for x in (quality, english) if x)
                 # LoRA 触发词不再自动注入：同一个 LoRA 常有不同服装/姿势/器官
                 # 变体，各自的触发词不同，统一注入会与用户提示词打架。
                 # 触发词改由界面提供「填入」按钮，用户自己决定用哪一组。

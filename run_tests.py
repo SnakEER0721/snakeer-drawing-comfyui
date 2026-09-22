@@ -85,8 +85,25 @@ FAST = [
     "test_lora_category.py",    # 回归：LoRA 分类的优先级（画质词 vs 部位词、元数据 vs 默认）
     "test_null_params.py",      # 回归：参数送 null 不许抛 TypeError（数字框清空 + NaN 就是这条路径）
     "test_poisson_blend.py",    # 回归：融合不许动蒙版外；中文路径读写（cv2 自己读写不了）
+    "test_auto_free.py",        # 回归：每 N 张图自动释放显存（用户报的"开太久卡死"）。
+                                #       删掉 run_graph 里那句调用这个测试就变红
+    "test_translate_threads.py",  # 回归：翻译的 sqlite 连接不许跨线程共用（上游报告 P0-1）。
+                                #       改回 check_same_thread=False 共享连接就变红；
+                                #       同时守住「词库缺失时中文翻译要能降级工作」(P0-2)
+    "test_translate_xss.py",    # 真浏览器：往提示词框粘贴 <img onerror> 不许执行
+                                #       （上游报告 P1-1；改回 innerHTML 拼接就变红）
+                                # ★ 它必须同时出现在 FAST 和 BROWSER 里：
+                                #   QUICK = [t for t in FAST if t not in BROWSER]，
+                                #   只写进 BROWSER 的话两边都不跑、永远"绿"。
     "test_browser_cleanup.py",  # 回归：残留的测试浏览器要能清掉（这一句曾经一直空转，
                                 #       表现为"连跑两次 fast，第二次 4 个浏览器测试全红"）
+    "test_param_ranges.py",     # 回归：参数范围和 NaN/Infinity 必须在建图前拦住
+                                #       （上游报告 P1-2/P1-3/P1-4）。纯函数，不占 GPU。
+                                #       把 check_param_ranges 短路掉这个测试立刻变红（22 条）
+    "test_alias_kind_guard.py",  # 回归：别名文字会**反向决定** LoRA 分类
+                                #       （给 r17329_illuu 起名带「角色」→ 被判成角色，
+                                #        实际是画风 LoRA）。只读，不碰 lora_aliases.json；
+                                #       含 A/B：拿"必然触发"的样本验证工具真的会红
 ]
 # 实测修正：test_api 与 test_compare_feature 虽然带断言汇总，但同样真实出图，
 # 分别耗时 417s / 141s —— 不能算「快」。统一放进 slow 层。
@@ -104,18 +121,25 @@ BROWSER = [
     "test_viewer_ui.py",        # 真浏览器点图/翻页
     "test_lora_ui_e2e.py",      # 真浏览器看 LoRA 面板的角标 / 改名字对话框
     "test_browser_isolation.py",  # 真浏览器（这条本身是查浏览器进程隔离的）
+    "test_translate_xss.py",    # 真浏览器：往提示词框粘贴 <img onerror> 不许执行
+                                #       （上游报告 P1-1；改回 innerHTML 拼接就变红）
     "test_browser_cleanup.py",  # 真浏览器（这条本身是查残留清理的）
 ]
 QUICK = [t for t in FAST if t not in BROWSER]
 # slow = **真测试**：它们会打印 RESULT / 结果: 那一行，也就是有对错。
 # 都要真实出图，所以慢。用 --tier slow 跑。
 SLOW = [
-    "test_api.py",              # 接口全量：38 条断言
+    "test_api.py",              # 接口全量：源码里 38 处 check() 调用，
+                                # 运行时 41 条断言（其中一个是 5 项循环）
     "test_compare_feature.py",  # 构图/特征对比，11 条断言
     "test_inpaint.py",          # 局部重绘只改蒙版区域（内联判定，打印 RESULT）
     # 真的放大一张图、量成品像素。单测只测算术，这条测整条链路
     # （算尺寸 -> 建图 ImageScale -> ComfyUI 出图）。用户报过"放大把尺寸拉伸了"。
     "test_upscale_e2e.py",
+    # 参数范围/NaN 的**入口那一层**：裸 JSON 里的 NaN 是 json.loads 在解析阶段
+    # 就吞进去的，纯函数验不到；"用户看到 400 还是 500"也只有真打 HTTP 才知道。
+    # 它只出 1 张图（且出完立刻删），为的是验"正常值没被误伤"。
+    "test_param_http.py",
 ]
 # exp = **实验脚本**，不是测试：它们只把图生成出来给人眼看，**没有任何判定**，
 # 因此没有"通过/失败"可言。所以：
@@ -141,7 +165,19 @@ EXP = [
 ]
 
 
-def run(name, timeout):
+def run(name, timeout, need_summary=True):
+    """跑一个测试，返回 (判定, 秒数, 汇总行)。
+
+    need_summary=True（默认）：**没打出汇总行就算失败**（NO-SUMMARY）。
+      L138 的判据写着「能不能打印出 RESULT / 结果: 那一行」就是"算不算测试"的
+      判据 —— 那把没有汇总行的东西放进 FAST/SLOW，它本来就**不该在那一层**，
+      理当报红让人发现，而不是静默通过。
+      实测（2026-09-20 上游报告 E-1）：原来 exit-code 只数 "FAIL"，
+      于是 NO-SUMMARY 和 TIMEOUT 都不进退出码 —— 挂满 900 秒的测试，
+      套件照样退 0。当 CI 门禁用的脚本上，这等于门禁是假的。
+    need_summary=False：给 exp_*.py 用（它们本来就**没有对错**，不打印汇总
+      是设计如此），仍返回 NO-SUMMARY，但**不计入失败**。
+    """
     p = os.path.join(TESTS, name)
     if not os.path.isfile(p):
         return "SKIP", 0.0, "文件不存在"
@@ -186,7 +222,10 @@ def run(name, timeout):
         return "FAIL", dt, (verdict or "退出码 %d，无汇总" % r.returncode)
 
     if verdict is None:
-        return "NO-SUMMARY", dt, "没有汇总输出（实验脚本？）"
+        if need_summary:
+            # 在这一层里的东西**必须**有判定行 —— 没有就是"看着是绿的测试"
+            return "NO-SUMMARY", dt, "这一层要求有汇总行，但它没打（是实验脚本放错层？）"
+        return "NO-SUMMARY", dt, "没有汇总输出（实验脚本，无对错）"
 
     if "FAIL" in v_up or ("失败" in verdict and "0 失败" not in verdict
                           and "0 项失败" not in verdict):
@@ -278,16 +317,24 @@ def main():
 
     total_fail = 0
     total_t = 0.0
+    # 退出码要数**所有"没通过"**，不只是 FAIL。
+    # 原来只数 FAIL，于是 TIMEOUT（挂满 900 秒）和 NO-SUMMARY（忘打汇总行）
+    # 都不进退出码，套件照样退 0。
+    # 但 SKIP 不算失败：环境不具备（服务没起、没装 playwright）是正常情况，
+    # 项目成文约定就是"SKIP 不是通过、也不是失败"。
+    fail_states = {"FAIL", "TIMEOUT"}
     if a.tier in ("default", "all", "quick", "fast", "api", "slow"):
         preflight()
     for label, items in groups:
         print("=" * 78)
         print("【%s】%d 个" % (label, len(items)))
         print("=" * 78)
+        # 只有 exp_*.py 允许没有汇总行（它们没有对错，见 L138 的判据）
+        need_summary = (label != "exp")
         for name in items:
-            v, dt, msg = run(name, a.timeout)
+            v, dt, msg = run(name, a.timeout, need_summary)
             total_t += dt
-            if v == "FAIL":
+            if v in fail_states or v == "NO-SUMMARY":
                 total_fail += 1
             color = {"PASS": "OK  ", "FAIL": "FAIL", "SKIP": "skip",
                      "TIMEOUT": "TIME", "NO-SUMMARY": "?   "}[v]

@@ -237,10 +237,17 @@ try:
         o3 = PB.imread_u(p, cv2.IMREAD_COLOR)
         src_now = PB.imread_u(same_in, cv2.IMREAD_COLOR)
         check(src_now is not None, "源文件还在、还能读（没被写坏）")
-        # 源＝目标时，融合是在原图上做的，蒙版内应该有变化
+        # 源＝目标时，融合是在原图上做的，蒙版内应该有变化。
+        #
+        # 原来这里写的是 `check(inner_diff2 >= 0, ...)` —— 而 np.abs(...).mean()
+        # **恒 ≥ 0**，这条断言永远为真。报告（E-2）抓到了它。
+        # 更要紧的是：上一段测的正是「seamlessClone 改写目标参数导致两次写入互相
+        # 抵消、融合结果等于没变」这个坑 —— 差异恰好为 0 时，`>= 0` 照样放行。
+        # 阈值取 1.0 而不是 0：本机实测这个差异是 **10.50**，离 0 很远；
+        # 取 1.0 既能挡住"完全没变"，又不会因为平台间浮点/编码微小差别误红。
         inner_diff2 = np.abs(o3[inner].astype(int) - src_now[inner].astype(int)).mean()
-        check(inner_diff2 >= 0,
-              "源＝目标时不崩（蒙版内平均差异 %.2f）" % inner_diff2)
+        check(inner_diff2 > 1.0,
+              "源＝目标时蒙版内确实变了（平均差异 %.2f，要求 > 1.0）" % inner_diff2)
     except Exception as e:
         check(False, "源＝目标时抛异常了: %s: %s" % (type(e).__name__, e))
 

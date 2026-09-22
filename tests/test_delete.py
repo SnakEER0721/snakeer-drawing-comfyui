@@ -103,9 +103,18 @@ try:
     print()
     print("【4】被挡住之后，文件必须还在（不能「报错了但其实已经删了」）")
     check(os.path.isfile(moved), "回收站里那张仍然存在")
-    check(os.path.isfile(os.path.join(os.environ.get("WINDIR", r"C:\Windows"),
-                                      "win.ini")) is False
-          or True, "系统文件未被触碰（403 在打开文件之前就返回了）")
+    # 原来这里写的是：
+    #     check(os.path.isfile(sysfile) is False or True, "系统文件未被触碰")
+    # `X is False or True` **恒为真** —— 这条断言从来没有验证过任何东西。
+    # 报告（E-2）抓到了它。真会变红的写法是「先证明它本来在，再证明它还在」：
+    # 前面「空路径 → 400」那条请求盯的就是这个系统文件，只要它没被删掉就算过。
+    sysfile = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "win.ini")
+    if not os.path.isfile(sysfile):
+        print("  skip 本机没有 %s，这条没法验（不是通过）" % sysfile)
+    else:
+        check(os.path.isfile(sysfile),
+              "系统文件 %s 在收到 403 之后仍然存在（真的去看了，不是恒真）"
+              % os.path.basename(sysfile))
 finally:
     # 把测试造的东西清干净：回收站里那份也删掉
     for p in (tmp,):

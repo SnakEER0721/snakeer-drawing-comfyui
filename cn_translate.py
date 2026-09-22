@@ -2,8 +2,10 @@
 
 Two-layer lookup, mirroring how the Bilingual Prompt Inspector itself works:
 
-  layer 1  base_tags.json  - 139 hand-curated entries (quality words, hair,
+  layer 1  base_tags.json  - 141 hand-curated entries (quality words, hair,
            expression, lighting...). Small but exact and verified.
+           （原来是 139 —— 那是初版的数字；后来增补了 2 条，
+            THIRD-PARTY.md 写的就是 141，这里跟着改。）
   layer 2  danbooru_tags.sqlite3 - 328k ffdkj entries, used as a fallback.
 
 Layer 2 is filtered by the Danbooru category code so that a Chinese term
@@ -24,6 +26,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 
 # ---------------------------------------------------------------------------
 # 词库路径解析（可移植）
@@ -634,20 +637,54 @@ class Translator:
         try:
             if not os.path.isfile(_DB_PATH):
                 raise FileNotFoundError(_DB_PATH)
-            self.conn = sqlite3.connect(
-                "file:%s?mode=ro" % _DB_PATH.replace("\\", "/"),
-                uri=True, check_same_thread=False)
-            self.conn.row_factory = sqlite3.Row
         except Exception as e:
             self.db_missing = True
-            self.conn = None
             warn_local("词库不可用，已退化为内置词表（路径: %s）" % _DB_PATH, e)
+        self._local = threading.local()
         self._cache: dict[str, str | None] = {}
         self._max_cn = 8
         self.reverse: dict[str, str] = {}
         self._known_cache: dict[str, bool] = {}
         self._exact_cache: dict[str, bool] = {}
         self._load_reverse()
+
+    @property
+    def conn(self):
+        """Each thread gets its own read-only connection, made on first use.
+
+        原来这里是一个**全进程共用的连接**（`check_same_thread=False`），
+        没有任何锁 —— 这是本项目最严重的缺陷，2026-09-20 实测复现：
+        16 并发打 /api/translate，**46% 的请求 500**，报错签名是
+        `InterfaceError: bad parameter or other API misuse`(272 次) 和
+        `IndexError: tuple index out of range`(170 次)；4 并发（≈开两个标签页）
+        也有 5% 失败。单线程对照 0% —— 把根因钉死在并发上。
+
+        为什么用 threading.local 而不是"加一把锁"：
+          * 库是 `mode=ro` 只读的，各连接之间没有写冲突，正确性天然成立；
+          * 加锁会把翻译变成串行 —— `_segment` 对一个 12 字串要查约 40 次库，
+            全部串行会把界面敲字时的延迟放大到很可观；
+          * 实测这条路的调用频率很高（每敲一次字都走），是并发压力的正主。
+
+        返回 None = 词库不可用（调用方本来就有 `if self.conn is None` 保护）。
+        `check_same_thread` 不用关：每个连接只在自己线程里用。
+        """
+        if self.db_missing:
+            return None
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            try:
+                conn = sqlite3.connect(
+                    "file:%s?mode=ro" % _DB_PATH.replace("\\", "/"),
+                    uri=True)
+                conn.row_factory = sqlite3.Row
+            except Exception as e:
+                # 建连接本身失败（文件被删、被锁、权限不足）—— 记一次就够，
+                # 不要每次查询都刷日志。
+                self.db_missing = True
+                warn_local("词库打开失败，已退化为内置词表（路径: %s）" % _DB_PATH, e)
+                return None
+            self._local.conn = conn
+        return conn
 
     def _load_reverse(self) -> None:
         """Index English tags by their stored Chinese gloss.
@@ -888,7 +925,18 @@ class Translator:
         if variant in self.base or variant in _SUPPLEMENT or variant in self.reverse:
             self._exact_cache[variant] = True
             return True
-        row = self.conn.execute(
+        # 这道保护以前**只有这里有漏**：另外四处（_load_reverse / is_known_tag /
+        # _resolve，以及现在的 conn 属性）都判了 None，就这里直接 .execute()。
+        # 而 _exact 恰好被 _segment 的分词循环调用 —— **任何含中文的输入都必经
+        # 此处**，于是词库一缺，中文翻译 100% 崩：
+        #   AttributeError: 'NoneType' object has no attribute 'execute'
+        # 实测 8 线程 × 750 次 = 6000 次调用，0 次成功。
+        # 这直接违反本文件开头的设计承诺（"翻译会退化但服务仍能启动"）——
+        # 服务确实起来了，但中文翻译这个核心功能全废。
+        conn = self.conn
+        if conn is None:
+            return False
+        row = conn.execute(
             "SELECT name FROM tags WHERE chinese = ? AND category_id IN (0,5) LIMIT 1",
             (variant,),
         ).fetchone()

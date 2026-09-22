@@ -1426,7 +1426,12 @@ function buildLoraRow(it, all, kind, sub){
       //   **一个字都看不出这个名字是自动从 C站取的**，用户会当成自己起的。
       //   和下拉框后缀（aliasSourceLabel）配成一对，两处都说清来源。
       if(m.catalog_name) bits.push(mkBit(
-          (m.alias ? "C站真名 " : "") + m.catalog_name, "--fg"));
+          // "--fg" 这个变量**根本不存在**（:root 里叫 --txt），于是
+          // `s.style.color = "var(--fg)"` 是无效声明、被浏览器整条丢掉，
+          // 这一行掉成父元素的弱灰色 —— 恰好废掉了上面 L1422-1427 注释
+          // 想达到的效果（让用户看出这个真名是自动从 C站取的）。
+          // 2026-09-20 改回 --txt：整页共 19 个变量，没有 --fg 这个。
+          (m.alias ? "C站真名 " : "") + m.catalog_name, "--txt"));
       if(m.catalog_base) bits.push(mkBit("底模 " + m.catalog_base, "--dim2"));
       const wh = m.catalog_weight_hint;
       if(wh && wh.length) bits.push(mkBit("作者推荐权重 " + wh.join("–"), "--dim2"));
@@ -1549,9 +1554,39 @@ async function doTranslate(){
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({text:t})}).then(r=>r.json());
     if(!r.ok){ $("transOut").textContent = "翻译出错：" + r.error; return; }
-    let html = r.english ? "<b>→ " + r.english + "</b>" : "没有识别出任何标签，换个说法试试";
-    if(r.unknown && r.unknown.length)
-      html += '<div class="unk">未收录：' + r.unknown.join(" ") + "（这部分不会进入模型）</div>";
+    // 这里原来是拼 HTML 字符串再 `innerHTML = html` —— **一个真能执行的 XSS**。
+    // 2026-09-20 实测（无头 Edge 打开真实页面，往提示词框粘贴）：
+    //   <img src=x onerror="document.title='XSS_FIRED'">
+    //   → document.title 真的变成 XSS_FIRED，<img> 真的进了 DOM。
+    // 为什么中英混排能过、纯中文不行：纯中文被分词器逐字拆开并插空格
+    // （`<b>` → `< b >`），拼不成标签；而含 ASCII 的输入走 lookup 的 ASCII
+    // 分支被**原样透传**，HTML 结构完整保留。
+    //
+    // 危害不在"外部网站打进来"（服务只监听 127.0.0.1，还有 Host/Origin 校验），
+    // 而在于**同源脚本天然放行**，而同一批 API 里有 /api/delete、/api/reveal、
+    // /api/set_config、/api/upload —— 用户从群里复制一段别人分享的"提示词"
+    // 粘进来，就可能被拿走任意本地操作权限。
+    //
+    // 修法：把用户输入一律走 textContent（**纯文本，不解析标签**），
+    // 需要粗体/样式的地方用 createElement 现造 —— 结构由代码定，内容由
+    // textContent 填，两者永不混淆。不要退回字符串拼接。
+    const out = $("transOut");
+    out.textContent = "";
+    if(r.english){
+      const b = document.createElement("b");
+      b.textContent = "→ " + r.english;
+      out.appendChild(b);
+    } else {
+      out.appendChild(document.createTextNode("没有识别出任何标签，换个说法试试"));
+    }
+    const addNote = (label, items, tail) => {
+      if(!items || !items.length) return;
+      const d = document.createElement("div");
+      d.className = "unk";
+      d.textContent = label + items.join(" ") + tail;
+      out.appendChild(d);
+    };
+    addNote("未收录：", r.unknown, "（这部分不会进入模型）");
     // 手打的英文片段会照常进入提示词（这是有意的，用户可以写模型认得、
     // 词库没收录的标签），但本体可能不是真标签。不拦截，只说明 ——
     // 否则预览显示「→ han」会让人以为识别成功了。
@@ -1559,10 +1594,7 @@ async function doTranslate(){
     // 误报率实测：面板标签组合 400 条提示词 0 条误报；词库快照缺的那些基础
     // 单词（hands/eyes/face/hair/waist/mouth）也不会被误报，因为
     // is_known_tag 会查 _SUPPLEMENT 的值，这一层把缺口挡住了。
-    if(r.not_tags && r.not_tags.length)
-      html += '<div class="unk">不是词库里的标签：' + r.not_tags.join(" ")
-            + "（会照常写进提示词，但模型可能不认识）</div>";
-    $("transOut").innerHTML = html;
+    addNote("不是词库里的标签：", r.not_tags, "（会照常写进提示词，但模型可能不认识）");
   }catch(e){ $("transOut").textContent = "翻译服务不可用：" + e.message; }
 }
 $("promptCN").addEventListener("input", () => {
@@ -1633,8 +1665,10 @@ function bytesToBase64(bytes){
 
 // ---------- 蒙版编辑器（手动涂抹 → 局部重绘） ----------
 // 画布上是"原图 + 半透明红色标记"；导出时换成 alpha 通道：
-// alpha=255 表示"要重绘"（涂过的地方），alpha=0 表示保留。
-// 这个极性与 ComfyUI 的 VAEEncodeForInpaint 一致（白色=重绘区）。
+// alpha=0 表示"要重绘"（涂过的地方），alpha=255 表示保留。
+// ★ 别把这条极性弄反：后端的 ImageCompositeMasked 是"白色=重绘区"，
+//   所以 server.py 收到这张蒙版后会**反转一次**。一旦有人照旧注释把它翻过来，
+//   结果就是整张图被重绘。前端真实实现见下面 exportMaskDataURL()。
 let maskState = { path:null, strokes:[], drawing:false, size:48 };
 
 function openMaskEditor(path){
