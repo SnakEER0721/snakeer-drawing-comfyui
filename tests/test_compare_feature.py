@@ -122,9 +122,33 @@ try:
     print("      用的提示词:", (r2.get("used_prompt") or "")[:70])
 
     gal_new = gallery() - gal_before
+    # ★ 只数**这次重绘自己**的文件（`inp_` 是产品给重绘结果的命名）。
+    #
+    #   为什么不能拿整个差集去比（实测数据，别再猜）：
+    #   `iter_output_images(OUT_ANIME)` 递归**整个产出目录**，只跳过下划线开头的
+    #   子目录（`_depth/` `_recycle/` …），日期目录全算。本机实测：非下划线目录下
+    #   躺着 **1054 张 png**；`/api/recent` 按 mtime 排序后**截断到 limit**，
+    #   于是这 200 条只覆盖最新的一小段 —— 实测第 200 名与第 201 名只差 **106 秒**。
+    #   → 任何**别的**写入者只要在测试窗口内多产出一张，它就会挤进这 200 条，
+    #     同时把它原本第 200 名那张挤出去；**进和出**都落进差集。实测本机就一直
+    #     挂着一个自动出图的循环（约每 84 秒一张），于是这条在慢速层整层跑时
+    #     红过一次（`RESULT: 1 项失败: 画廊里只多了重绘结果这一张`），
+    #     而单独跑、以及此后连跑 5 次全绿。
+    #   → 性质是**测试跟产出目录的当前状态赛跑**，不是产品回归。
+    #
+    #   收窄之后判据**仍然只强不弱**，而且更贴原意：这里数的是
+    #   「**这次重绘**在画廊里留下了几张」。正常情况恰好 1 张（结果图本身），
+    #   普通合成中间产物 `inp_*_blend0.png` 必须已被收进回收站、不在画廊里。
+    #   A/B 实测：把服务端那句 `move_to_recycle(f)` 换成 `pass` → 立刻变红，
+    #   列出 `inp_*_0.png` 和 `inp_*_blend0.png` 两张，两张都带 `inp_` 前缀，
+    #   所以收窄**没有**放过这个 bug。
+    #   （`inp_` 只认产品自己的命名：本机那个自动循环产出的是 `ui_*`，不会串进来。）
+    def is_product(p):
+        return os.path.basename(p).startswith("inp_")
+    jia = {p for p in gal_new if is_product(p)}
     check("画廊里只多了重绘结果这一张（普通合成结果没留在画廊里）",
-          gal_new == {os.path.normcase(result)},
-          [os.path.basename(p) for p in gal_new])
+          jia == {os.path.normcase(result)},
+          [os.path.basename(p) for p in jia])
 
     print()
     print("=== 2. 溯源：/api/recent 是否带出原图 ===")

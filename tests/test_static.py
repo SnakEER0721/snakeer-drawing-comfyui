@@ -160,7 +160,6 @@ SILENT_ALLOWED = {
     ("humanize_comfy_error", 0):  "错误正文不是 JSON 就原样返回，属正常分支",
     ("object_info_choices", 0):   "拿不到 ComfyUI 节点信息时返回默认值",
     ("_read_safetensors_header", 0): "不是合法 safetensors 就返回 None，调用方判断",
-    ("lora_category", 0):         "训练元数据读不出来就退回默认分类",
     ("lora_aliases", 0):          "命名表不存在是正常情况",
     ("_catalog_load", 0):         "LoRA 事实目录不存在 / 没权限是**正常情况**："
                                   "发布版用户第一次拿到包时它可能还没生成过，"

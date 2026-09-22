@@ -13,11 +13,17 @@ it, and cv2 is already present - no ComfyUI node install needed.
 """
 import os
 
-import cv2
 import numpy as np
 
+# ★ cv2 在这里是**延迟导入**（放到真正用到它的函数内部），不是漏了。
+#   原因：原来是模块级 `import cv2`，于是 `import server` → `import poisson_blend`
+#   → `import cv2`。没装 opencv 的解释器上，连 server 都 import 不进来 ——
+#   tests/test_path_whitelist.py 会打印 RESULT: SKIP 并 exit 0，而那道闸守着的
+#   是"能不能读走硬盘任意文件"。SKIP 只是行首一个小写 skip，等于这道闸可以
+#   在无信号的情况下消失。拆开后不用 cv2 的功能不再依赖它。
 
-def imread_u(path, flags=cv2.IMREAD_COLOR):
+
+def imread_u(path, flags=None):
     """读图，**支持含中文/空格的路径**。
 
     ★ 为什么不能直接用 cv2.imread：cv2 在 Windows 上用 ANSI 代码页打开文件，
@@ -29,6 +35,9 @@ def imread_u(path, flags=cv2.IMREAD_COLOR):
 
       做法：让 Python 按字节读文件（它认 Unicode 路径），再交给 cv2 解码。
     """
+    import cv2
+    if flags is None:             # 默认值不能在 def 行上写 cv2.IMREAD_COLOR ——
+        flags = cv2.IMREAD_COLOR  # 那等于模块级依赖 cv2（见文件顶部说明）
     try:
         data = np.fromfile(path, dtype=np.uint8)
     except OSError:
@@ -49,6 +58,7 @@ def imwrite_u(path, img):
 
       做法：先编码到内存，再用 Python 按字节写盘。
     """
+    import cv2
     ext = os.path.splitext(path)[1] or ".png"
     ok, buf = cv2.imencode(ext, img)
     if not ok:
@@ -101,6 +111,7 @@ def copy_png_text(src_path, dst_path, keys=("prompt", "workflow", "parameters"))
 def poisson_blend(original_path, redrawn_path, mask_path, out_path,
                   mode="mixed"):
     """Blend the redrawn region into the original using Poisson editing."""
+    import cv2
     dst = imread_u(original_path, cv2.IMREAD_COLOR)
     src = imread_u(redrawn_path, cv2.IMREAD_COLOR)
     m = imread_u(mask_path, cv2.IMREAD_GRAYSCALE)
@@ -159,4 +170,5 @@ def poisson_blend(original_path, redrawn_path, mask_path, out_path,
 
 
 if __name__ == "__main__":
+    import cv2
     print("模块加载 OK；seamlessClone 可用:", hasattr(cv2, "seamlessClone"))

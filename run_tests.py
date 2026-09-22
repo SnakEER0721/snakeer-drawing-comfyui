@@ -33,9 +33,11 @@ exp_blend_compare 345s）被当成回归测试跑了。它们不打印任何判�
 分类的判据（能不能打印出判定行）和守卫见 dev/audit_slow_tests.py。
 """
 import argparse
+import io
 import os
 import subprocess
 import sys
+import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -217,9 +219,14 @@ def run(name, timeout, need_summary=True):
         return "SKIP", dt, verdict
 
     if r.returncode != 0:
+        # ★ 失败要把完整输出留一份 —— 断言当时打印的实际值都在里面，
+        #   不留就等于"红了但查不出为什么"。见 save_failure_output() 的说明。
+        where = save_failure_output(name, out, verdict or "退出码 %d" % r.returncode)
+        tail = "  完整输出: %s" % where if where else ""
         if "PASS" in v_up or "0 失败" in (verdict or "") or "0 项失败" in (verdict or ""):
-            return "FAIL", dt, "打印成功但退出码 %d（脚本在打印后崩了）" % r.returncode
-        return "FAIL", dt, (verdict or "退出码 %d，无汇总" % r.returncode)
+            return "FAIL", dt, ("打印成功但退出码 %d（脚本在打印后崩了）%s"
+                                % (r.returncode, tail))
+        return "FAIL", dt, (verdict or "退出码 %d，无汇总" % r.returncode) + tail
 
     if verdict is None:
         if need_summary:
@@ -233,6 +240,42 @@ def run(name, timeout, need_summary=True):
     if "PASS" in v_up or "0 失败" in verdict or "0 项失败" in verdict or "100%" in verdict:
         return "PASS", dt, verdict
     return "PASS", dt, verdict + "（退出码 0）"
+
+
+def save_failure_output(name, out, verdict):
+    """把失败测试的完整输出落盘，返回文件路径（写不进去就返回 None）。
+
+    ★ 为什么必须有这个：`_run_one` 用 capture_output=True 把子进程输出**全抓走**，
+    只在汇总行里留一句 `RESULT: 1 项失败: xxx`。断言**当时打印的详情**
+    （实际值、多了哪几个文件、哪一行对不上）**转头就没了** —— 想查就得手工
+    再跑一遍那个测试。而这个项目的手工重跑恰恰常常不复现：实测
+    `test_compare_feature.py` 那条"画廊里只多了重绘结果这一张"在慢速层红、
+    单独跑却绿（它比较的是 `/api/recent` 前后差集，跟产出目录的当前状态有关）。
+
+    这违反项目自己的规矩：**静默失败最忌讳**，而"失败但不留证据"就是其中一种 ——
+    红过之后你手里没有任何东西能判断它是产品回归还是测试自己脆。
+
+    落盘位置在系统临时目录，**不写产出目录、不写仓库**（测试不许留垃圾）。
+    只保留最近 40 份，免得临时目录无限长。
+    """
+    try:
+        d = os.path.join(tempfile.gettempdir(), "snakeer_testfail")
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, "%s_%s.txt" % (name.replace(".py", ""),
+                                           time.strftime("%Y%m%d_%H%M%S")))
+        with io.open(p, "w", encoding="utf-8", newline="\n") as f:
+            f.write("# %s\n# 判定: %s\n# 退出码外的完整 stdout+stderr\n\n"
+                    % (name, verdict))
+            f.write(out or "（子进程没有任何输出）")
+        old = sorted(f for f in os.listdir(d) if f.endswith(".txt"))
+        for f in old[:-40]:
+            try:
+                os.remove(os.path.join(d, f))
+            except OSError:
+                pass
+        return p
+    except Exception:
+        return None
 
 
 def preflight():
@@ -317,6 +360,12 @@ def main():
 
     total_fail = 0
     total_t = 0.0
+    # 各判定分别计数。★ 为什么要单独数 SKIP：SKIP 的行首只是一个**小写**
+    #   `skip`，而汇总行原来只打印「失败 N 个」—— 一道守着关键行为的闸
+    #   （如 test_path_whitelist）在缺依赖时静默 SKIP，汇总行看不出任何异常。
+    #   实测：`python`（无 cv2）跑 test_path_whitelist.py 得到 RESULT: SKIP、
+    #   exit 0，汇总行照样「失败 0 个」。跳过必须自己有一个数字，才不隐形。
+    counts = {"PASS": 0, "FAIL": 0, "SKIP": 0, "TIMEOUT": 0, "NO-SUMMARY": 0}
     # 退出码要数**所有"没通过"**，不只是 FAIL。
     # 原来只数 FAIL，于是 TIMEOUT（挂满 900 秒）和 NO-SUMMARY（忘打汇总行）
     # 都不进退出码，套件照样退 0。
@@ -334,6 +383,7 @@ def main():
         for name in items:
             v, dt, msg = run(name, a.timeout, need_summary)
             total_t += dt
+            counts[v] = counts.get(v, 0) + 1
             if v in fail_states or v == "NO-SUMMARY":
                 total_fail += 1
             color = {"PASS": "OK  ", "FAIL": "FAIL", "SKIP": "skip",
@@ -342,7 +392,8 @@ def main():
         print()
 
     print("=" * 78)
-    print("合计 %.1fs（%.1f 分钟）  失败 %d 个" % (total_t, total_t / 60, total_fail))
+    print("合计 %.1fs（%.1f 分钟）  通过 %d  跳过 %d  失败 %d 个"
+          % (total_t, total_t / 60, counts["PASS"], counts["SKIP"], total_fail))
     if a.tier in ("default", "all"):
         print("已跳过 slow 层 %d 个（要真实出图，用 --tier slow 单独跑）" % len(SLOW))
         # 只数**本地存在的**：发布包里 exp_*.py 一个都没有，

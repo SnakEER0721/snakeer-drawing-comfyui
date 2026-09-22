@@ -1016,8 +1016,10 @@ def lora_category(name: str, meta: dict, filename: str,
                 return {"category": "Character", "source": "训练元数据(角色标签)",
                         "kind": "character"}
             return {"category": "Style", "source": "训练元数据", "kind": "style"}
-        except Exception:
-            pass
+        except Exception as e:
+            # 元数据坏了就退回默认分类，但不能静默 —— 否则用户只看到
+            # 「分类是 Concept」，不知道是解析炸了还是本来就没元数据。
+            warn("读取 LoRA 训练元数据失败", e)
 
     return {"category": "Concept", "source": "默认"}
 
@@ -1779,9 +1781,22 @@ def build_graph(p: dict) -> dict:
 
 
 # ---------------------------------------------------------------- upload/run
+def _safe_image_ext(filename: str) -> str:
+    """从上传文件名里取一个**安全的**扩展名；取不到就退回 `.png`。
+
+    ★ 为什么不能直接用 `os.path.splitext(filename)[1]`：这个值会进 multipart 的
+      `Content-Disposition` 头。实测 filename = `'a.png\\r\\nContent-Type: x'`
+      得到 safe = `'ui_XXXXXXXXXX.png\\r\\ncontent-type: x'` —— 客户端给的换行
+      直接进了请求头，可以在 multipart 里多插一个头/段。
+      只放行 `.` + 1~5 位小写字母数字，其余一律 `.png`。
+    """
+    ext = os.path.splitext(filename or "")[1].lower()
+    return ext if re.fullmatch(r"\.[a-z0-9]{1,5}", ext) else ".png"
+
+
 def upload_image(raw: bytes, filename: str) -> str:
     """Push an image into ComfyUI's input dir; return the name it stored under."""
-    safe = "ui_" + uuid.uuid4().hex[:10] + os.path.splitext(filename)[1].lower()
+    safe = "ui_" + uuid.uuid4().hex[:10] + _safe_image_ext(filename)
     boundary = "----dsh" + uuid.uuid4().hex
     body = b"".join([
         f"--{boundary}\r\n".encode(),
